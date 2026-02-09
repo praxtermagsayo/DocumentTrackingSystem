@@ -5,8 +5,16 @@
       <meta charset="UTF-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <title>DocumentTrackingSystem</title>
-      <script type="module" crossorigin src="/assets/index-iGQKj1wC.js"></script>
-      <link rel="stylesheet" crossorigin href="/assets/index-EHHWOGF7.css">
+      <script>
+        (function() {
+          var t = localStorage.getItem('doctrack_theme');
+          var dark = t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (dark) document.documentElement.classList.add('dark');
+          else document.documentElement.classList.remove('dark');
+        })();
+      </script>
+      <script type="module" crossorigin src="/assets/index-BGwg1sN-.js"></script>
+      <link rel="stylesheet" crossorigin href="/assets/index-D4OSlf-n.css">
     </head>
 
     <body>

@@ -1,16 +1,34 @@
 import { useState } from 'react';
-import { FileText, Clock, CheckCircle, AlertTriangle, MoreVertical } from 'lucide-react';
+import { FileText, Clock, CheckCircle, AlertTriangle, MoreVertical, Trash2, Eye, Loader2 } from 'lucide-react';
 import { Link, useLocation } from 'react-router';
 import { DocumentStatus } from '../types';
 import { useApp } from '../contexts/AppContext';
 import { formatDateShort, getStatusLabel } from '../lib/format';
 import { documentMatchesSearch } from '../lib/search';
 import { DocumentSourceBadge } from './document-source-badge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogTitle,
+} from './ui/alert-dialog';
+import { toast } from 'sonner';
 
 export function Dashboard() {
   const location = useLocation();
-  const { documents, searchQuery, currentUserId, teams } = useApp();
+  const { documents, searchQuery, currentUserId, teams, deleteDocument } = useApp();
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'signed' | 'rejected'>('all');
+  const [docToDelete, setDocToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Apply global search then take recent 6
   const searchFiltered = documents.filter((d) => documentMatchesSearch(d, searchQuery));
@@ -112,6 +130,25 @@ export function Dashboard() {
       .join('')
       .toUpperCase();
   };
+
+  const isOwner = (doc: { ownerId?: string | null }) =>
+    Boolean(currentUserId && doc.ownerId && doc.ownerId === currentUserId);
+
+  const handleDeleteDocument = async () => {
+    if (!docToDelete || !deleteDocument) return;
+    setIsDeleting(true);
+    try {
+      await deleteDocument(docToDelete);
+      toast.success('Document deleted');
+      setDocToDelete(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to delete document');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const docToDeleteRecord = docToDelete ? documents.find((d) => d.id === docToDelete) : null;
 
   return (
     <div className="space-y-6">
@@ -220,7 +257,7 @@ export function Dashboard() {
                       <div className={`p-2 rounded-lg ${getFileIconBg(doc.fileType)}`}>
                         {getFileIcon(doc.fileType)}
                       </div>
-                      <div>
+                      <div className="min-w-0 text-left">
                         <Link
                           to={`/documents/${doc.id}`}
                           state={{ from: location.pathname }}
@@ -230,10 +267,10 @@ export function Dashboard() {
                         >
                           {doc.title}
                         </Link>
-                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5 justify-start">
                           <DocumentSourceBadge document={doc} currentUserId={currentUserId} teams={teams} />
                         </div>
-                        <p className="text-xs mt-0.5" style={mutedStyle}>
+                        <p className="text-xs m-0 mt-0.5 text-left" style={mutedStyle}>
                           {doc.fileType} • {doc.fileSize}
                         </p>
                       </div>
@@ -260,9 +297,40 @@ export function Dashboard() {
                   </td>
                   <td className="px-6 py-4">{getStatusBadge(doc.status)}</td>
                   <td className="px-6 py-4">
-                    <button className="p-1 rounded transition-colors hover:opacity-80" style={mutedStyle}>
-                      <MoreVertical className="size-5" />
-                    </button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="p-1 rounded transition-colors hover:opacity-80"
+                          style={mutedStyle}
+                          aria-label="Document actions"
+                        >
+                          <MoreVertical className="size-5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem asChild>
+                          <Link
+                            to={`/documents/${doc.id}`}
+                            state={{ from: location.pathname }}
+                            className="flex items-center gap-2"
+                          >
+                            <Eye className="size-4" />
+                            View document
+                          </Link>
+                        </DropdownMenuItem>
+                        {isOwner(doc) && (
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onClick={() => setDocToDelete(doc.id)}
+                            className="flex items-center gap-2"
+                          >
+                            <Trash2 className="size-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </td>
                 </tr>
               ))}
@@ -283,6 +351,26 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+
+      <AlertDialog open={!!docToDelete} onOpenChange={(open) => !open && setDocToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogTitle>Delete document?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This action cannot be undone. The document &quot;{docToDeleteRecord?.title ?? 'Unknown'}&quot; will be permanently removed from the system.
+          </AlertDialogDescription>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteDocument}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700 text-white focus:ring-red-600 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {isDeleting && <Loader2 className="size-4 animate-spin" />}
+              {isDeleting ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

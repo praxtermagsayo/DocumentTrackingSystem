@@ -54,6 +54,13 @@
   color: var(--popover-foreground) !important;
   border-color: var(--border) !important;
 }
+
+/* Radix DropdownMenu (portaled) - opaque background and theme colors so it isn't see-through and stacks above content */
+[data-slot="dropdown-menu-content"] {
+  background-color: var(--popover) !important;
+  color: var(--popover-foreground) !important;
+  border-color: var(--border) !important;
+}
 .dark [data-slot="select-content"] [data-slot="select-item"] {
   color: var(--popover-foreground);
 }

@@ -161,7 +161,7 @@ export function UploadDocument() {
               id="category"
               value={formData.category}
               onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+              className="w-full pl-4 pr-8 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
               required
               style={inputStyle}
             >
@@ -182,7 +182,7 @@ export function UploadDocument() {
               id="status"
               value={formData.status}
               onChange={(e) => setFormData({ ...formData, status: e.target.value as typeof formData.status })}
-              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+              className="w-full pl-4 pr-8 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
               required
               style={inputStyle}
             >
@@ -204,7 +204,7 @@ export function UploadDocument() {
                 id="team"
                 value={formData.teamId}
                 onChange={(e) => setFormData({ ...formData, teamId: e.target.value })}
-                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+                className="w-full pl-4 pr-8 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
                 style={inputStyle}
               >
                 <option value="">Only me</option>

@@ -320,7 +320,7 @@ export function DocumentDetail() {
                   }
                 }}
                 disabled={isUpdatingAssignment}
-                className="w-full px-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                className="w-full pl-4 pr-8 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                 style={{ backgroundColor: 'var(--input-background)', color: 'var(--foreground)', borderColor: 'var(--border)' }}
               >
                 <option value="">Unassigned</option>
@@ -353,7 +353,7 @@ export function DocumentDetail() {
                   }
                 }}
                 disabled={isUpdatingTeam}
-                className="w-full px-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                className="w-full pl-4 pr-8 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                 style={{ backgroundColor: 'var(--input-background)', color: 'var(--foreground)', borderColor: 'var(--border)' }}
               >
                 <option value="">Only me</option>

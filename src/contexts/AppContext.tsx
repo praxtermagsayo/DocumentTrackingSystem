@@ -46,6 +46,8 @@ interface AppContextType {
   createTeam: (name: string) => Promise<Team>;
   addTeamMemberByEmail: (teamId: string, email: string, role: 'manager' | 'member') => Promise<void>;
   removeTeamMember: (teamId: string, userId: string) => Promise<void>;
+  deleteTeam: (teamId: string) => Promise<void>;
+  transferOwnership: (teamId: string, newAdminUserId: string) => Promise<void>;
   fetchTeamMembers: (teamId: string) => Promise<import('../types').TeamMember[]>;
 
   // Notifications (from database)
@@ -321,6 +323,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return teamService.fetchTeamMembers(teamId);
   };
 
+  const deleteTeam = async (teamId: string) => {
+    await teamService.deleteTeam(teamId);
+    await refreshTeams();
+    await refreshDocuments();
+  };
+
+  const transferOwnership = async (teamId: string, newAdminUserId: string) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user?.id) throw new Error('Not signed in');
+    await teamService.transferOwnership(teamId, newAdminUserId, session.user.id);
+    await refreshTeams();
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -341,6 +356,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         createTeam,
         addTeamMemberByEmail,
         removeTeamMember,
+        deleteTeam,
+        transferOwnership,
         fetchTeamMembers,
         notifications,
         refreshNotifications,

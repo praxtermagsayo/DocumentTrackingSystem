@@ -187,7 +187,7 @@ export function Inbox() {
                       <div className={`p-2 ${getFileIconBg(doc.fileType)} rounded-lg`}>
                         {getFileIcon(doc.fileType)}
                       </div>
-                      <div className="min-w-0">
+                      <div className="min-w-0 text-left">
                         <Link
                           to={`/documents/${doc.id}`}
                           state={{ from: location.pathname }}
@@ -197,10 +197,10 @@ export function Inbox() {
                         >
                           {doc.title}
                         </Link>
-                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5 justify-start">
                           <DocumentSourceBadge document={doc} currentUserId={currentUserId} teams={teams} />
                         </div>
-                        <p className="text-xs mt-0.5" style={mutedStyle}>
+                        <p className="text-xs m-0 mt-0.5 text-left" style={mutedStyle}>
                           {doc.fileType} • {doc.fileSize}
                         </p>
                       </div>

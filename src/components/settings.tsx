@@ -162,7 +162,7 @@ export function Settings() {
             <select
               value={settings.language}
               onChange={(e) => setSettings({ ...settings, language: e.target.value })}
-              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-4 pr-8 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               style={inputStyle}
             >
               <option value="en">English</option>
@@ -177,7 +177,7 @@ export function Settings() {
             <select
               value={settings.timezone}
               onChange={(e) => setSettings({ ...settings, timezone: e.target.value })}
-              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-4 pr-8 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               style={inputStyle}
             >
               <option value="America/Los_Angeles">Pacific Time (PT)</option>
@@ -192,7 +192,7 @@ export function Settings() {
             <select
               value={settings.defaultView}
               onChange={(e) => setSettings({ ...settings, defaultView: e.target.value })}
-              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-4 pr-8 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               style={inputStyle}
             >
               <option value="grid">Grid View</option>

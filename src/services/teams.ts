@@ -1,13 +1,23 @@
 import { supabase } from '../lib/supabase';
-import type { Team, TeamMember } from '../types';
+import type { Team, TeamMember, TeamRole } from '../types';
+
+function normalizeRole(role: string): TeamRole {
+  if (role === 'owner') return 'admin';
+  return role as TeamRole;
+}
 
 export async function fetchMyTeams(userId: string): Promise<Team[]> {
   const { data: memberRows, error: memberError } = await supabase
     .from('team_members')
-    .select('team_id')
+    .select('team_id, role')
     .eq('user_id', userId);
   if (memberError) throw memberError;
-  const teamIds = (memberRows || []).map((r) => r.team_id);
+  const rows = (memberRows || []) as { team_id: string; role: string }[];
+  const teamIds = rows.map((r) => r.team_id);
+  const roleByTeamId: Record<string, TeamRole> = {};
+  rows.forEach((r) => {
+    roleByTeamId[r.team_id] = normalizeRole(r.role);
+  });
   if (teamIds.length === 0) return [];
 
   const { data: teamsData, error: teamsError } = await supabase
@@ -22,6 +32,7 @@ export async function fetchMyTeams(userId: string): Promise<Team[]> {
     name: t.name,
     createdBy: t.created_by,
     createdAt: t.created_at,
+    currentUserRole: roleByTeamId[t.id],
   }));
 
   const { data: countData } = await supabase
@@ -139,4 +150,46 @@ export async function removeTeamMember(teamId: string, userIdToRemove: string): 
 
 export async function leaveTeam(teamId: string, userId: string): Promise<void> {
   await removeTeamMember(teamId, userId);
+}
+
+/** Delete the team. Caller must be an admin of the team. */
+export async function deleteTeam(teamId: string): Promise<void> {
+  const { error } = await supabase.from('teams').delete().eq('id', teamId);
+  if (error) throw error;
+}
+
+/**
+ * Transfer admin role to another member. Caller must be the current admin.
+ * Sets the target user to admin and the caller to member.
+ */
+export async function transferOwnership(
+  teamId: string,
+  newAdminUserId: string,
+  currentAdminUserId: string
+): Promise<void> {
+  if (newAdminUserId === currentAdminUserId) throw new Error('Cannot transfer to yourself.');
+
+  const { data: rows } = await supabase
+    .from('team_members')
+    .select('id, user_id, role')
+    .eq('team_id', teamId)
+    .in('user_id', [newAdminUserId, currentAdminUserId]);
+  const byUser = new Map((rows || []).map((r: { user_id: string }) => [r.user_id, r]));
+  if (!byUser.has(newAdminUserId)) throw new Error('That user is not in the team.');
+  if (!byUser.has(currentAdminUserId)) throw new Error('You are not in the team.');
+
+  const newAdminRow = byUser.get(newAdminUserId) as { id: string };
+  const currentRow = byUser.get(currentAdminUserId) as { id: string };
+
+  const { error: err1 } = await supabase
+    .from('team_members')
+    .update({ role: 'admin' })
+    .eq('id', newAdminRow.id);
+  if (err1) throw err1;
+
+  const { error: err2 } = await supabase
+    .from('team_members')
+    .update({ role: 'member' })
+    .eq('id', currentRow.id);
+  if (err2) throw err2;
 }

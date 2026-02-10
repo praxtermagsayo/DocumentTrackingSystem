@@ -30,6 +30,8 @@ export interface Team {
   createdBy: string;
   createdAt: string;
   memberCount?: number;
+  /** Current user's role in this team (set when teams are loaded). */
+  currentUserRole?: TeamRole;
 }
 
 /** Team role: set when added to a team (or Admin for the creator). */
@@ -44,6 +46,13 @@ export interface TeamMember {
   role: TeamRole;
   createdAt: string;
 }
+
+/** Display labels for team roles (capitalized for UI). */
+export const TEAM_ROLE_LABELS: Record<TeamRole, string> = {
+  admin: 'Admin',
+  manager: 'Manager',
+  member: 'Member',
+};
 
 /** Short descriptions for team roles (for UI tooltips/help). */
 export const TEAM_ROLE_DESCRIPTIONS: Record<TeamRole, string> = {

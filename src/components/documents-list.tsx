@@ -121,7 +121,7 @@ export function DocumentsList() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as DocumentStatus | 'all')}
-                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+                className="w-full pl-10 pr-8 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
                 style={inputStyle}
               >
                 <option value="all">All Statuses</option>
@@ -140,7 +140,7 @@ export function DocumentsList() {
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+              className="w-full pl-4 pr-8 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
               style={inputStyle}
             >
               <option value="all">All Categories</option>

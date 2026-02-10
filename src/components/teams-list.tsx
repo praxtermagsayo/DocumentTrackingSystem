@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Users, Plus, Loader2, ArrowRight, Mail, Info } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
-import { TEAM_ROLE_DESCRIPTIONS, type TeamRole } from '../types';
+import { TEAM_ROLE_DESCRIPTIONS, TEAM_ROLE_LABELS, type TeamRole } from '../types';
 import { EmailChipInput } from './email-chip-input';
 
 const TEAM_COLORS = ['bg-orange-500', 'bg-green-500', 'bg-purple-500', 'bg-blue-500', 'bg-amber-500'];
@@ -11,6 +11,10 @@ const INVITE_ROLES: { value: 'manager' | 'member'; label: string }[] = [
   { value: 'member', label: 'Member' },
   { value: 'manager', label: 'Manager' },
 ];
+
+function canManageMembers(team: { currentUserRole?: import('../types').TeamRole }): boolean {
+  return team.currentUserRole === 'admin' || team.currentUserRole === 'manager';
+}
 
 export function TeamsList() {
   const navigate = useNavigate();
@@ -95,7 +99,7 @@ export function TeamsList() {
           <div className="mt-3 p-4 rounded-lg border space-y-2" style={{ ...cardStyle, borderColor: 'var(--border)' }}>
             {(['admin', 'manager', 'member'] as TeamRole[]).map((role) => (
               <div key={role}>
-                <span className="font-medium capitalize" style={textStyle}>{role}</span>
+                <span className="font-medium" style={textStyle}>{TEAM_ROLE_LABELS[role]}</span>
                 <p className="text-sm mt-0.5" style={mutedStyle}>{TEAM_ROLE_DESCRIPTIONS[role]}</p>
               </div>
             ))}
@@ -170,11 +174,18 @@ export function TeamsList() {
                   </div>
                   <div>
                     <p className="font-medium" style={textStyle}>{team.name}</p>
-                    <p className="text-sm" style={mutedStyle}>{team.memberCount ?? 0} member{(team.memberCount ?? 0) !== 1 ? 's' : ''}</p>
+                    <p className="text-sm flex items-center gap-2" style={mutedStyle}>
+                      <span>{team.memberCount ?? 0} member{(team.memberCount ?? 0) !== 1 ? 's' : ''}</span>
+                      {team.currentUserRole && (
+                        <span className="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-violet-500/15 text-violet-700 dark:text-violet-400">
+                          You: {TEAM_ROLE_LABELS[team.currentUserRole]}
+                        </span>
+                      )}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  {inviteTeamId === team.id ? (
+                  {canManageMembers(team) && inviteTeamId === team.id ? (
                     <form
                       onSubmit={(e) => handleInvite(e, team.id)}
                       className="space-y-3 w-full min-w-0"
@@ -194,7 +205,7 @@ export function TeamsList() {
                         <select
                           value={inviteRole}
                           onChange={(e) => setInviteRole(e.target.value as 'manager' | 'member')}
-                          className="px-3 py-2 rounded-lg border text-sm h-[42px] shrink-0"
+                          className="pl-3 pr-8 py-2 rounded-lg border text-sm h-[42px] shrink-0"
                           style={inputStyle}
                           disabled={isInviting}
                           title="Role for new members"
@@ -214,15 +225,17 @@ export function TeamsList() {
                     </form>
                   ) : (
                     <>
-                      <button
-                        type="button"
-                        onClick={() => setInviteTeamId(team.id)}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium border hover:opacity-90"
-                        style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}
-                      >
-                        <Mail className="size-4" />
-                        Add member
-                      </button>
+                      {canManageMembers(team) && (
+                        <button
+                          type="button"
+                          onClick={() => setInviteTeamId(team.id)}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium border hover:opacity-90"
+                          style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}
+                        >
+                          <Mail className="size-4" />
+                          Add member
+                        </button>
+                      )}
                       <Link
                         to={`/teams/${team.id}`}
                         className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:opacity-90"

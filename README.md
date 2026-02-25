@@ -27,4 +27,3 @@
      - Then run **`fix-storage-objects-fk-for-user-delete.sql`** to fix the storage FK.
 
   Requires the [Supabase CLI](https://supabase.com/docs/guides/cli) and `supabase login`.
-  # DocumentTrackingSystem

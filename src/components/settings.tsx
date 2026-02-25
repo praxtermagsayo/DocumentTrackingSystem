@@ -9,14 +9,31 @@ import {
   Download,
   Trash2,
   Save,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '../lib/supabase';
 import { useApp } from '../contexts/AppContext';
+import * as userDataService from '../services/userData';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Input } from './ui/input';
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from './ui/alert-dialog';
 
 export function Settings() {
   const navigate = useNavigate();
-  const { theme, setTheme } = useApp();
+  const { theme, setTheme, logout } = useApp();
+  const [isExporting, setIsExporting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
   const [settings, setSettings] = useState({
     emailNotifications: true,
     pushNotifications: false,
@@ -30,6 +47,51 @@ export function Settings() {
 
   const handleSave = () => {
     toast.success('Settings saved successfully');
+  };
+
+  const handleExportData = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user?.id) {
+      toast.error('Please sign in to export your data');
+      return;
+    }
+    setIsExporting(true);
+    try {
+      const data = await userDataService.exportAllUserData(session.user.id);
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `doctrack-export-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Data exported successfully');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to export data');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user?.id) {
+      toast.error('Not signed in');
+      return;
+    }
+    setIsDeleting(true);
+    setShowDeleteConfirm(false);
+    try {
+      await userDataService.deleteAllUserData(session.user.id);
+      await userDataService.deleteAuthUser();
+      logout();
+      navigate('/login', { replace: true });
+      toast.success('Account and all data have been deleted');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete account');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const cardStyle = {
@@ -233,11 +295,10 @@ export function Settings() {
                 setTheme('light');
                 toast.success('Theme set to light');
               }}
-              className={`flex-1 p-4 border-2 rounded-lg transition-all ${
-                theme === 'light'
-                  ? 'border-blue-600 bg-blue-500/15'
-                  : 'hover:opacity-90'
-              }`}
+              className={`flex-1 p-4 border-2 rounded-lg transition-all ${theme === 'light'
+                ? 'border-blue-600 bg-blue-500/15'
+                : 'hover:opacity-90'
+                }`}
               style={theme === 'light' ? undefined : { borderColor: 'var(--border)' }}
             >
               <p className="font-medium text-center" style={textStyle}>Light</p>
@@ -248,11 +309,10 @@ export function Settings() {
                 setTheme('dark');
                 toast.success('Theme set to dark');
               }}
-              className={`flex-1 p-4 border-2 rounded-lg transition-all ${
-                theme === 'dark'
-                  ? 'border-blue-600 bg-blue-500/15'
-                  : 'hover:opacity-90'
-              }`}
+              className={`flex-1 p-4 border-2 rounded-lg transition-all ${theme === 'dark'
+                ? 'border-blue-600 bg-blue-500/15'
+                : 'hover:opacity-90'
+                }`}
               style={theme === 'dark' ? undefined : { borderColor: 'var(--border)' }}
             >
               <p className="font-medium text-center" style={textStyle}>Dark</p>
@@ -263,11 +323,10 @@ export function Settings() {
                 setTheme('system');
                 toast.success('Theme set to system');
               }}
-              className={`flex-1 p-4 border-2 rounded-lg transition-all ${
-                theme === 'system'
-                  ? 'border-blue-600 bg-blue-500/15'
-                  : 'hover:opacity-90'
-              }`}
+              className={`flex-1 p-4 border-2 rounded-lg transition-all ${theme === 'system'
+                ? 'border-blue-600 bg-blue-500/15'
+                : 'hover:opacity-90'
+                }`}
               style={theme === 'system' ? undefined : { borderColor: 'var(--border)' }}
             >
               <p className="font-medium text-center" style={textStyle}>System</p>
@@ -289,34 +348,88 @@ export function Settings() {
         </div>
         <div className="space-y-3">
           <button
-            className="w-full flex items-center justify-between p-4 border rounded-lg transition-colors hover:opacity-90"
+            type="button"
+            onClick={handleExportData}
+            disabled={isExporting}
+            className="w-full flex items-center justify-between p-4 border rounded-lg transition-colors hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ borderColor: 'var(--border)' }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = 'var(--accent)';
+              if (!isExporting) e.currentTarget.style.backgroundColor = 'var(--accent)';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.backgroundColor = '';
             }}
           >
             <div className="flex items-center gap-3">
-              <Download className="size-5" style={mutedStyle} />
+              {isExporting ? <Loader2 className="size-5 animate-spin" style={mutedStyle} /> : <Download className="size-5" style={mutedStyle} />}
               <div className="text-left">
                 <p className="font-medium" style={textStyle}>Export Data</p>
-                <p className="text-sm" style={mutedStyle}>Download all your documents and data</p>
+                <p className="text-sm" style={mutedStyle}>Download all your documents, activities, and data as JSON</p>
               </div>
             </div>
           </button>
 
-          <button className="w-full flex items-center justify-between p-4 border border-red-300 dark:border-red-800 rounded-lg hover:bg-red-500/10 transition-colors text-red-600 dark:text-red-400">
+          <button
+            type="button"
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={isDeleting}
+            className="w-full flex items-center justify-between p-4 border border-red-300 dark:border-red-800 rounded-lg hover:bg-red-500/10 transition-colors text-red-600 dark:text-red-400 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             <div className="flex items-center gap-3">
-              <Trash2 className="size-5" />
+              {isDeleting ? <Loader2 className="size-5 animate-spin" /> : <Trash2 className="size-5" />}
               <div className="text-left">
                 <p className="font-medium">Delete Account</p>
-                <p className="text-sm opacity-90">Permanently delete your account and data</p>
+                <p className="text-sm opacity-90">Permanently delete your account and all data</p>
               </div>
             </div>
           </button>
         </div>
+
+        <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete account?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete all your data including documents, activities, event categories, and notifications. This action cannot be undone. You will be signed out.
+                <br />
+                <br />
+                Enter "DELETE MY ACCOUNT" to confirm:
+                <div className="mt-2 w-full flex items-center justify-center">
+                  <Input
+                    type="text"
+                    value={deleteConfirm}
+                    onChange={(e) => setDeleteConfirm(e.target.value)}
+                    placeholder="DELETE"
+                  />
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+              <button
+                type="button"
+                disabled={deleteConfirm !== 'DELETE MY ACCOUNT'}
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleDeleteAccount();
+                }}
+                className="inline-flex items-center justify-center rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ color: 'var(--white)' }}
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" style={mutedStyle} />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    Delete account
+                  </>
+                )}
+              </button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
 
       {/* Actions */}

@@ -32,13 +32,8 @@ export function Help() {
       category: 'Getting Started',
     },
     {
-      question: 'How do I share a document with team members?',
-      answer: 'Open the document and use "Share with team" to make it visible to a team. Team members can view the document, add comments, and export PDF. Only the document owner can update status, delete, or change sharing.',
-      category: 'Collaboration',
-    },
-    {
       question: 'Who can delete or modify a document?',
-      answer: 'Only the document creator (owner) can delete it or update its status. Team members can view the document, add comments, and export PDF. This keeps the system secure and consistent.',
+      answer: 'Only the document creator (owner) can delete it or update its status. This keeps the system secure and consistent.',
       category: 'Document Management',
     },
     {

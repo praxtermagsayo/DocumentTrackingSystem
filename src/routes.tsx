@@ -10,9 +10,9 @@ import { Inbox } from './components/inbox';
 import { Sent } from './components/sent';
 import { Drafts } from './components/drafts';
 import { Archived } from './components/archived';
-import { TeamsList } from './components/teams-list';
-import { TeamDocuments } from './components/team-documents';
 import { Notifications } from './components/notifications';
+import { Activities } from './components/activities';
+import { EventCategories } from './components/event-categories';
 import { Settings } from './components/settings';
 import { Account } from './components/account';
 import { Help } from './components/help';
@@ -47,9 +47,9 @@ export const router = createBrowserRouter([
       { path: 'sent', Component: Sent },
       { path: 'drafts', Component: Drafts },
       { path: 'archived', Component: Archived },
-      { path: 'teams', Component: TeamsList },
-      { path: 'teams/:teamId', Component: TeamDocuments },
       { path: 'notifications', Component: Notifications },
+      { path: 'activities', Component: Activities },
+      { path: 'event-categories', Component: EventCategories },
       { path: 'settings', Component: Settings },
       { path: 'account', Component: Account },
       { path: 'help', Component: Help },

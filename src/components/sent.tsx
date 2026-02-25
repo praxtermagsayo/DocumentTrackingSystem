@@ -11,7 +11,7 @@ type StatusTab = 'all' | 'pending' | 'signed' | 'rejected';
 
 export function Sent() {
   const location = useLocation();
-  const { documents, searchQuery, currentUserId, teams } = useApp();
+  const { documents, searchQuery, currentUserId } = useApp();
   const [activeTab, setActiveTab] = useState<StatusTab>('all');
   // Sent = documents that are not draft (submitted/sent), then filter by global search
   const sentDocuments = documents
@@ -154,7 +154,7 @@ export function Sent() {
                           {doc.title}
                         </Link>
                         <div className="mt-1 flex flex-wrap items-center gap-1.5 justify-start">
-                          <DocumentSourceBadge document={doc} currentUserId={currentUserId} teams={teams} />
+                          <DocumentSourceBadge document={doc} currentUserId={currentUserId} />
                         </div>
                         <p className="text-xs m-0 mt-0.5 text-left" style={mutedStyle}>
                           {doc.fileType} • {doc.fileSize}

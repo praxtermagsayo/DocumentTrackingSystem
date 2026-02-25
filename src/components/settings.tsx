@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp } from '../contexts/AppContext';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 
 export function Settings() {
   const navigate = useNavigate();
@@ -159,46 +160,55 @@ export function Settings() {
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium mb-2" style={textStyle}>Language</label>
-            <select
+            <Select
               value={settings.language}
-              onChange={(e) => setSettings({ ...settings, language: e.target.value })}
-              className="w-full pl-4 pr-8 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              style={inputStyle}
+              onValueChange={(v: string) => setSettings({ ...settings, language: v })}
             >
-              <option value="en">English</option>
-              <option value="es">Spanish</option>
-              <option value="fr">French</option>
-              <option value="de">German</option>
-            </select>
+              <SelectTrigger className="w-full" style={inputStyle}>
+                <SelectValue placeholder="Select language" />
+              </SelectTrigger>
+              <SelectContent style={{ backgroundColor: 'var(--popover)', color: 'var(--popover-foreground)' }}>
+                <SelectItem value="en">English</SelectItem>
+                <SelectItem value="es">Spanish</SelectItem>
+                <SelectItem value="fr">French</SelectItem>
+                <SelectItem value="de">German</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div>
             <label className="block text-sm font-medium mb-2" style={textStyle}>Timezone</label>
-            <select
+            <Select
               value={settings.timezone}
-              onChange={(e) => setSettings({ ...settings, timezone: e.target.value })}
-              className="w-full pl-4 pr-8 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              style={inputStyle}
+              onValueChange={(v: string) => setSettings({ ...settings, timezone: v })}
             >
-              <option value="America/Los_Angeles">Pacific Time (PT)</option>
-              <option value="America/Denver">Mountain Time (MT)</option>
-              <option value="America/Chicago">Central Time (CT)</option>
-              <option value="America/New_York">Eastern Time (ET)</option>
-            </select>
+              <SelectTrigger className="w-full" style={inputStyle}>
+                <SelectValue placeholder="Select timezone" />
+              </SelectTrigger>
+              <SelectContent style={{ backgroundColor: 'var(--popover)', color: 'var(--popover-foreground)' }}>
+                <SelectItem value="America/Los_Angeles">Pacific Time (PT)</SelectItem>
+                <SelectItem value="America/Denver">Mountain Time (MT)</SelectItem>
+                <SelectItem value="America/Chicago">Central Time (CT)</SelectItem>
+                <SelectItem value="America/New_York">Eastern Time (ET)</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div>
             <label className="block text-sm font-medium mb-2" style={textStyle}>Default View</label>
-            <select
+            <Select
               value={settings.defaultView}
-              onChange={(e) => setSettings({ ...settings, defaultView: e.target.value })}
-              className="w-full pl-4 pr-8 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              style={inputStyle}
+              onValueChange={(v: string) => setSettings({ ...settings, defaultView: v })}
             >
-              <option value="grid">Grid View</option>
-              <option value="list">List View</option>
-              <option value="compact">Compact View</option>
-            </select>
+              <SelectTrigger className="w-full" style={inputStyle}>
+                <SelectValue placeholder="Select view" />
+              </SelectTrigger>
+              <SelectContent style={{ backgroundColor: 'var(--popover)', color: 'var(--popover-foreground)' }}>
+                <SelectItem value="grid">Grid View</SelectItem>
+                <SelectItem value="list">List View</SelectItem>
+                <SelectItem value="compact">Compact View</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </div>

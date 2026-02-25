@@ -12,12 +12,12 @@ import {
   Bell,
   Plus,
   Settings,
-  Circle,
   LogOut,
   User,
-  Users,
   ChevronDown,
   X,
+  Calendar,
+  Tag,
 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 
@@ -28,14 +28,11 @@ export function Layout() {
     isAuthenticated,
     logout,
     user,
-    teams,
     unreadCount,
     searchQuery,
     setSearchQuery,
   } = useApp();
   const [showUserMenu, setShowUserMenu] = useState(false);
-
-  const teamColors = ['text-orange-500', 'text-green-500', 'text-purple-500', 'text-blue-500', 'text-amber-500'];
 
   // Check authentication
   useEffect(() => {
@@ -58,6 +55,11 @@ export function Layout() {
     { path: '/sent', label: 'Sent', icon: Send },
     { path: '/drafts', label: 'Drafts', icon: File },
     { path: '/archived', label: 'Archived', icon: Archive },
+  ];
+
+  const scheduleItems = [
+    { path: '/activities', label: 'Activities', icon: Calendar },
+    { path: '/event-categories', label: 'Event Categories', icon: Tag },
   ];
 
   const handleLogout = () => {
@@ -127,54 +129,42 @@ export function Layout() {
             );
           })}
 
-          {/* Teams Section */}
           <div className="pt-6">
             <p
               className="px-3 text-xs font-semibold uppercase tracking-wider mb-2"
               style={{ color: 'var(--muted-foreground)' }}
             >
-              Teams
+              Schedule
             </p>
             <div className="space-y-1">
-              <Link
-                to="/teams"
-                className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors"
-                style={
-                  location.pathname === '/teams'
-                    ? { backgroundColor: 'var(--sidebar-accent)', color: 'var(--sidebar-primary)' }
-                    : { color: 'var(--sidebar-foreground)' }
-                }
-              >
-                <Users className="size-4" />
-                Manage teams
-              </Link>
-              {teams.map((team, i) => {
-                const isTeamActive = location.pathname === `/teams/${team.id}`;
+              {scheduleItems.map((item) => {
+                const Icon = item.icon;
+                const active = isActive(item.path);
                 return (
                   <Link
-                    key={team.id}
-                    to={`/teams/${team.id}`}
+                    key={item.path}
+                    to={item.path}
                     className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors"
                     style={
-                      isTeamActive
+                      active
                         ? { backgroundColor: 'var(--sidebar-accent)', color: 'var(--sidebar-primary)' }
                         : { color: 'var(--sidebar-foreground)' }
                     }
                     onMouseEnter={(e) => {
-                      if (!isTeamActive) {
+                      if (!active) {
                         e.currentTarget.style.backgroundColor = 'var(--sidebar-accent)';
                         e.currentTarget.style.color = 'var(--sidebar-accent-foreground)';
                       }
                     }}
                     onMouseLeave={(e) => {
-                      if (!isTeamActive) {
+                      if (!active) {
                         e.currentTarget.style.backgroundColor = '';
                         e.currentTarget.style.color = 'var(--sidebar-foreground)';
                       }
                     }}
                   >
-                    <Circle className={`size-2 fill-current ${teamColors[i % teamColors.length]}`} />
-                    {team.name}
+                    <Icon className="size-5" />
+                    {item.label}
                   </Link>
                 );
               })}

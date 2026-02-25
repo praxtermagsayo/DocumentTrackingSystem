@@ -39,8 +39,6 @@ export interface UploadFormData {
   category: string;
   status: DocumentStatus;
   file: File | null;
-  /** Optional team to share the document with (team id) */
-  teamId: string;
 }
 
 const initialFormData: UploadFormData = {
@@ -49,7 +47,6 @@ const initialFormData: UploadFormData = {
   category: '',
   status: 'draft',
   file: null,
-  teamId: '',
 };
 
 export function useUploadDocument(
@@ -155,7 +152,6 @@ export function useUploadDocument(
           category: formData.category || 'Other',
           status: formData.status,
           file: formData.file,
-          teamId: formData.teamId?.trim() || undefined,
         });
         await notificationService.createNotification({
           userId,

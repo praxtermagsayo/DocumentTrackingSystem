@@ -1,6 +1,5 @@
 import { supabase } from '../lib/supabase';
 import type { Document, DocumentStatus } from '../types';
-import { getMyTeamIds } from './teams';
 
 const TRACKING_PREFIX = '#TRK';
 const BUCKET = 'documents';
@@ -39,31 +38,19 @@ function rowToDocument(row: DocumentRow): Document {
     trackingId: row.tracking_id,
     ownerName: row.owner_name,
     ownerId: row.user_id,
-    teamId: row.team_id ?? undefined,
-    assignedTo: row.assigned_to ?? undefined,
-    assignedToName: row.assigned_to_name ?? undefined,
   };
 }
 
 export async function fetchDocuments(userId: string): Promise<Document[]> {
-  const teamIds = await getMyTeamIds(userId);
+  const { data, error } = await supabase
+    .from('documents')
+    .select('*')
+    .eq('user_id', userId)
+    .order('updated_at', { ascending: false });
 
-  // Fetch in two queries and merge so team members reliably see shared documents (avoids .or()/.in() syntax issues)
-  const [ownResult, teamResult] = await Promise.all([
-    supabase.from('documents').select('*').eq('user_id', userId).order('updated_at', { ascending: false }),
-    teamIds.length > 0
-      ? supabase.from('documents').select('*').in('team_id', teamIds).order('updated_at', { ascending: false })
-      : { data: [] as DocumentRow[], error: null },
-  ]);
-
-  if (ownResult.error) throw ownResult.error;
-  if (teamResult.error) throw teamResult.error;
-
-  const byId = new Map<string, Document>();
-  for (const row of ownResult.data || []) byId.set(row.id, rowToDocument(row));
-  for (const row of (teamResult.data as DocumentRow[]) || []) if (!byId.has(row.id)) byId.set(row.id, rowToDocument(row));
-
-  return Array.from(byId.values()).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  if (error) throw error;
+  const documents = (data || []).map((row) => rowToDocument(row as DocumentRow));
+  return documents;
 }
 
 function formatFileSizeDisplay(bytes: number): string {
@@ -80,9 +67,8 @@ export async function createDocument(params: {
   category: string;
   status: DocumentStatus;
   file?: File;
-  teamId?: string | null;
 }): Promise<Document> {
-  const { userId, ownerName, title, description, category, status, file, teamId } = params;
+  const { userId, ownerName, title, description, category, status, file } = params;
 
   const year = new Date().getFullYear();
   const { count } = await supabase
@@ -117,7 +103,6 @@ export async function createDocument(params: {
     file_size,
     owner_name: ownerName,
   };
-  if (teamId != null && teamId !== '') insertPayload.team_id = teamId;
 
   const { data: row, error: insertError } = await supabase
     .from('documents')
@@ -189,30 +174,6 @@ export async function createDocument(params: {
   }
 
   return rowToDocument(row as DocumentRow);
-}
-
-export async function updateDocumentTeam(documentId: string, teamId: string | null): Promise<void> {
-  const { error } = await supabase
-    .from('documents')
-    .update({ team_id: teamId, updated_at: new Date().toISOString() })
-    .eq('id', documentId);
-  if (error) throw error;
-}
-
-export async function updateDocumentAssignment(
-  documentId: string,
-  assignedTo: string | null,
-  assignedToName: string | null
-): Promise<void> {
-  const { error } = await supabase
-    .from('documents')
-    .update({
-      assigned_to: assignedTo,
-      assigned_to_name: assignedToName,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', documentId);
-  if (error) throw error;
 }
 
 export async function updateDocumentStatus(

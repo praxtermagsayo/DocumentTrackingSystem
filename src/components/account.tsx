@@ -4,14 +4,14 @@ import { useApp } from '../contexts/AppContext';
 import {
   ArrowLeft,
   User,
+  ShieldCheck,
   Mail,
-  Phone,
   MapPin,
   Calendar,
   Save,
   Camera,
 } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 export function Account() {
   const navigate = useNavigate();
@@ -19,7 +19,7 @@ export function Account() {
   const [formData, setFormData] = useState({
     name: user?.name || '',
     email: user?.email || '',
-    phone: '+1 (555) 123-4567',
+    role: user?.role || '',
     location: 'San Francisco, CA',
     joinDate: 'January 15, 2024',
   });
@@ -121,14 +121,14 @@ export function Account() {
           <div>
             <label className="block text-sm font-medium mb-2" style={textStyle}>
               <div className="flex items-center gap-2 mb-2">
-                <Phone className="size-4" style={mutedStyle} />
-                Phone Number
+                <ShieldCheck className="size-4" style={mutedStyle} />
+                Role
               </div>
             </label>
             <input
-              type="tel"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              type="text"
+              value={formData.role}
+              disabled
               className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               style={inputStyle}
             />

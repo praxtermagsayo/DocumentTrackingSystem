@@ -9,7 +9,7 @@ import { DocumentSourceBadge } from './document-source-badge';
 export function DocumentsList() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { documents, searchQuery: globalSearch, setSearchQuery: setGlobalSearch, currentUserId, teams } = useApp();
+  const { documents, searchQuery: globalSearch, setSearchQuery: setGlobalSearch, currentUserId } = useApp();
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') ?? '');
   const [statusFilter, setStatusFilter] = useState<DocumentStatus | 'all'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -189,7 +189,7 @@ export function DocumentsList() {
                       <div className="flex-1 min-w-0">
                         <h3 className="font-medium truncate" style={textStyle} title={doc.title}>{doc.title}</h3>
                         <div className="mt-1.5 flex flex-wrap items-center gap-2 gap-y-1">
-                          <DocumentSourceBadge document={doc} currentUserId={currentUserId} teams={teams} />
+                          <DocumentSourceBadge document={doc} currentUserId={currentUserId} />
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(doc.status)}`}>
                             {getStatusLabel(doc.status)}
                           </span>

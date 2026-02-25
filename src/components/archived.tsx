@@ -6,7 +6,7 @@ import { DocumentSourceBadge } from './document-source-badge';
 
 export function Archived() {
   const location = useLocation();
-  const { documents, searchQuery, currentUserId, teams } = useApp();
+  const { documents, searchQuery, currentUserId } = useApp();
   const archivedDocuments = documents
     .filter((d) => d.status === 'archived')
     .filter((d) => documentMatchesSearch(d, searchQuery));
@@ -102,7 +102,7 @@ export function Archived() {
                           {doc.title}
                         </Link>
                         <div className="mt-1 flex flex-wrap items-center gap-1.5 justify-start">
-                          <DocumentSourceBadge document={doc} currentUserId={currentUserId} teams={teams} />
+                          <DocumentSourceBadge document={doc} currentUserId={currentUserId} />
                         </div>
                         <p className="text-xs m-0 mt-0.5 text-left" style={mutedStyle}>
                           {doc.fileType} • {doc.fileSize}

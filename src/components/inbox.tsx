@@ -11,7 +11,7 @@ type StatusTab = 'all' | 'pending' | 'signed' | 'rejected';
 
 export function Inbox() {
   const location = useLocation();
-  const { documents, searchQuery: globalSearch, setSearchQuery: setGlobalSearch, currentUserId, teams } = useApp();
+  const { documents, searchQuery: globalSearch, setSearchQuery: setGlobalSearch, currentUserId } = useApp();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<StatusTab>('all');
 
@@ -198,7 +198,7 @@ export function Inbox() {
                           {doc.title}
                         </Link>
                         <div className="mt-1 flex flex-wrap items-center gap-1.5 justify-start">
-                          <DocumentSourceBadge document={doc} currentUserId={currentUserId} teams={teams} />
+                          <DocumentSourceBadge document={doc} currentUserId={currentUserId} />
                         </div>
                         <p className="text-xs m-0 mt-0.5 text-left" style={mutedStyle}>
                           {doc.fileType} • {doc.fileSize}

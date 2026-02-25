@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabase';
 
 export function UploadDocument() {
   const navigate = useNavigate();
-  const { user, teams, refreshDocuments, refreshNotifications } = useApp();
+  const { user, refreshDocuments, refreshNotifications } = useApp();
   const getUserId = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession();
     return session?.user?.id ?? null;
@@ -194,31 +194,6 @@ export function UploadDocument() {
               Select the initial status for this document. You can change it later.
             </p>
           </div>
-
-          {teams.length > 0 && (
-            <div>
-              <label htmlFor="team" className="block text-sm font-medium mb-2" style={textStyle}>
-                Share with team
-              </label>
-              <select
-                id="team"
-                value={formData.teamId}
-                onChange={(e) => setFormData({ ...formData, teamId: e.target.value })}
-                className="w-full pl-4 pr-8 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
-                style={inputStyle}
-              >
-                <option value="">Only me</option>
-                {teams.map((team) => (
-                  <option key={team.id} value={team.id}>
-                    {team.name}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-2 text-sm" style={mutedStyle}>
-                Select a team so its members can see this document. If you leave &quot;Only me&quot;, team members will not see it (you can change this later on the document page).
-              </p>
-            </div>
-          )}
         </div>
 
         <div className="flex gap-3 justify-end">

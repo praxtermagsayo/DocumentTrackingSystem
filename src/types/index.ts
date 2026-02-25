@@ -16,50 +16,30 @@ export interface Document {
   ownerAvatar?: string;
   /** Owner's user id (for permission checks). */
   ownerId?: string;
-  /** When set, document is shared with this team and all members can view it */
-  teamId?: string | null;
-  /** User id of the person this document is assigned to (for tracking). */
-  assignedTo?: string | null;
-  /** Display name of the assignee. */
-  assignedToName?: string | null;
 }
 
-export interface Team {
+/** Event category status for filtering/display */
+export type EventCategoryStatus = 'active' | 'inactive';
+
+export interface EventCategory {
   id: string;
   name: string;
+  status: EventCategoryStatus;
   createdBy: string;
   createdAt: string;
-  memberCount?: number;
-  /** Current user's role in this team (set when teams are loaded). */
-  currentUserRole?: TeamRole;
 }
 
-/** Team role: set when added to a team (or Admin for the creator). */
-export type TeamRole = 'admin' | 'manager' | 'member';
-
-export interface TeamMember {
+export interface Activity {
   id: string;
-  teamId: string;
   userId: string;
-  email: string | null;
-  displayName: string | null;
-  role: TeamRole;
+  postDate: string;
+  eventStart: string;
+  eventEnd: string;
+  categoryId: string;
+  categoryName?: string;
+  description: string;
   createdAt: string;
 }
-
-/** Display labels for team roles (capitalized for UI). */
-export const TEAM_ROLE_LABELS: Record<TeamRole, string> = {
-  admin: 'Admin',
-  manager: 'Manager',
-  member: 'Member',
-};
-
-/** Short descriptions for team roles (for UI tooltips/help). */
-export const TEAM_ROLE_DESCRIPTIONS: Record<TeamRole, string> = {
-  admin: 'Created the team. Full control: add/remove members, assign roles, delete team.',
-  manager: 'Can add and remove members (except other managers and admin). Can share documents with the team.',
-  member: 'Can view and edit documents shared with the team. Cannot manage members.',
-};
 
 export interface DocumentHistory {
   id: string;

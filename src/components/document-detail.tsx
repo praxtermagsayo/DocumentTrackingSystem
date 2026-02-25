@@ -11,7 +11,6 @@ import {
   Clock,
   Download,
   Trash2,
-  UserPlus,
   ChevronLeft,
   ChevronRight,
   Share2,
@@ -47,7 +46,7 @@ export function DocumentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { updateDocumentStatus, updateDocumentTeam, updateDocumentAssignment, deleteDocument, addComment, documents, teams, currentUserId, fetchTeamMembers } = useApp();
+  const { updateDocumentStatus, deleteDocument, addComment, documents, currentUserId } = useApp();
   const document = documents.find((d) => d.id === id);
 
   const {
@@ -79,9 +78,6 @@ export function DocumentDetail() {
   } = useDocumentDetail(id, documents, updateDocumentStatus, deleteDocument, addComment);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [isUpdatingTeam, setIsUpdatingTeam] = useState(false);
-  const [isUpdatingAssignment, setIsUpdatingAssignment] = useState(false);
-  const [teamMembers, setTeamMembers] = useState<import('../types').TeamMember[]>([]);
 
   const backPath = (location.state as { from?: string } | null)?.from ?? '/documents';
 
@@ -148,12 +144,6 @@ export function DocumentDetail() {
   const iconBgStyle = { backgroundColor: 'var(--muted)' };
 
   const isOwner = Boolean(currentUserId && document.ownerId && document.ownerId === currentUserId);
-
-  // Load team members when document is shared with a team (for Assign to dropdown)
-  useEffect(() => {
-    if (!document.teamId || !fetchTeamMembers) return;
-    fetchTeamMembers(document.teamId).then(setTeamMembers).catch(() => setTeamMembers([]));
-  }, [document.teamId, fetchTeamMembers]);
 
   return (
     <div className="space-y-6">
@@ -283,86 +273,8 @@ export function DocumentDetail() {
                   <p className="mt-1 font-medium" style={textStyle}>{formatDate(document.updatedAt)}</p>
                 </div>
               </div>
-              <div className="flex items-start gap-3">
-                <div className="mt-1 p-2 rounded-lg" style={iconBgStyle}>
-                  <UserPlus className="size-4 text-blue-600 dark:text-blue-400" />
-                </div>
-                <div>
-                  <p className="text-xs" style={mutedStyle}>Assigned to</p>
-                  <p className="mt-1 font-medium" style={textStyle}>{document.assignedToName || 'Not assigned'}</p>
-                </div>
-              </div>
             </div>
           </div>
-
-          {isOwner && document.teamId && teamMembers.length > 0 && (
-            <div className="rounded-lg shadow-sm border p-6" style={cardStyle}>
-              <h3 className="text-lg font-semibold mb-2" style={textStyle}>Assign to</h3>
-              <p className="text-sm mb-3" style={mutedStyle}>
-                Track responsibility by assigning this document to a team member.
-              </p>
-              <select
-                value={document.assignedTo ?? ''}
-                onChange={async (e) => {
-                  const value = e.target.value;
-                  const userId = value || null;
-                  const member = teamMembers.find((m) => m.userId === value);
-                  const name = member ? (member.displayName || member.email || 'Unknown') : null;
-                  if (isUpdatingAssignment) return;
-                  setIsUpdatingAssignment(true);
-                  try {
-                    await updateDocumentAssignment(document.id, userId, name);
-                    toast.success(userId ? `Assigned to ${name}` : 'Unassigned');
-                  } catch {
-                    toast.error('Failed to update assignment');
-                  } finally {
-                    setIsUpdatingAssignment(false);
-                  }
-                }}
-                disabled={isUpdatingAssignment}
-                className="w-full pl-4 pr-8 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-                style={{ backgroundColor: 'var(--input-background)', color: 'var(--foreground)', borderColor: 'var(--border)' }}
-              >
-                <option value="">Unassigned</option>
-                {teamMembers.map((m) => (
-                  <option key={m.id} value={m.userId}>{m.displayName || m.email || m.userId}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {currentUserId && document.ownerId === currentUserId && teams.length > 0 && (
-            <div className="rounded-lg shadow-sm border p-6" style={cardStyle}>
-              <h3 className="text-lg font-semibold mb-2" style={textStyle}>Share with team</h3>
-              <p className="text-sm mb-3" style={mutedStyle}>
-                Team members can only see this document when it’s shared with a team. Choose a team so members can view it.
-              </p>
-              <select
-                value={document.teamId ?? ''}
-                onChange={async (e) => {
-                  const teamId = e.target.value || null;
-                  if (isUpdatingTeam) return;
-                  setIsUpdatingTeam(true);
-                  try {
-                    await updateDocumentTeam(document.id, teamId);
-                    toast.success(teamId ? 'Document shared with team' : 'Document is now only visible to you');
-                  } catch {
-                    toast.error('Failed to update sharing');
-                  } finally {
-                    setIsUpdatingTeam(false);
-                  }
-                }}
-                disabled={isUpdatingTeam}
-                className="w-full pl-4 pr-8 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-                style={{ backgroundColor: 'var(--input-background)', color: 'var(--foreground)', borderColor: 'var(--border)' }}
-              >
-                <option value="">Only me</option>
-                {teams.map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
 
           <div className="rounded-lg shadow-sm border p-6" style={cardStyle}>
             <h3 className="text-lg font-semibold mb-4" style={textStyle}>Status History</h3>
@@ -489,7 +401,7 @@ export function DocumentDetail() {
           <div className="space-y-4 py-4">
             <div>
               <label className="block text-sm font-medium mb-2" style={textStyle}>New Status</label>
-              <Select value={selectedStatus} onValueChange={(v) => setSelectedStatus(v as DocumentStatus)}>
+              <Select value={selectedStatus} onValueChange={(v: DocumentStatus) => setSelectedStatus(v)}>
                 <SelectTrigger className="w-full h-10 rounded-lg border focus:ring-2 focus:ring-blue-500 bg-[var(--input-background)] [border-color:var(--border)] text-foreground">
                   <SelectValue />
                 </SelectTrigger>

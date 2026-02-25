@@ -1,11 +1,10 @@
 import { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
-import { Document, DocumentStatus, Team } from '../types';
+import { Document, DocumentStatus } from '../types';
 import { supabase } from '../lib/supabase';
 import * as themeLib from '../lib/theme';
 import type { User } from '@supabase/supabase-js';
 import * as documentService from '../services/documents';
 import * as notificationService from '../services/notifications';
-import * as teamService from '../services/teams';
 
 export interface Notification {
   id: string;
@@ -26,6 +25,7 @@ interface AppContextType {
   user: {
     name: string;
     email: string;
+    role: string;
     initials: string;
   } | null;
 
@@ -33,22 +33,10 @@ interface AppContextType {
   documents: Document[];
   refreshDocuments: () => Promise<void>;
   updateDocumentStatus: (docId: string, status: DocumentStatus, comment: string) => Promise<void>;
-  updateDocumentTeam: (docId: string, teamId: string | null) => Promise<void>;
-  updateDocumentAssignment: (docId: string, assignedTo: string | null, assignedToName: string | null) => Promise<void>;
   deleteDocument: (docId: string) => Promise<void>;
   addComment: (docId: string, comment: string) => Promise<void>;
   /** Current user's id (for ownership checks). */
   currentUserId: string | null;
-
-  // Teams (view others' documents via team membership)
-  teams: Team[];
-  refreshTeams: () => Promise<void>;
-  createTeam: (name: string) => Promise<Team>;
-  addTeamMemberByEmail: (teamId: string, email: string, role: 'manager' | 'member') => Promise<void>;
-  removeTeamMember: (teamId: string, userId: string) => Promise<void>;
-  deleteTeam: (teamId: string) => Promise<void>;
-  transferOwnership: (teamId: string, newAdminUserId: string) => Promise<void>;
-  fetchTeamMembers: (teamId: string) => Promise<import('../types').TeamMember[]>;
 
   // Notifications (from database)
   notifications: Notification[];
@@ -81,7 +69,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
   const resolvedTheme = theme === 'system' ? systemResolved : theme;
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [teams, setTeams] = useState<Team[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   // When theme is 'system', react to OS preference changes
@@ -106,6 +93,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     );
   };
 
+
+
   // Map Supabase User to app user
   const mapSupabaseUser = (u: User | null): AppContextType['user'] => {
     if (!u?.email) return null;
@@ -116,7 +105,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .join('')
       .toUpperCase()
       .slice(0, 2);
-    return { name, email: u.email, initials };
+    return { name, email: u.email, initials, role: u.user_metadata?.role || 'user' };
   };
 
   // Apply theme on mount and when theme changes
@@ -155,17 +144,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const refreshTeams = useCallback(async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user?.id) return;
-    try {
-      const list = await teamService.fetchMyTeams(session.user.id);
-      setTeams(list);
-    } catch {
-      setTeams([]);
-    }
-  }, []);
-
   // Restore session and listen for auth changes (Supabase); load documents and notifications when logged in
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -190,7 +168,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setCurrentUserId(null);
         setDocuments([]);
         setNotifications([]);
-        setTeams([]);
       }
     });
 
@@ -200,12 +177,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) return;
     const run = async () => {
-      await refreshTeams();
       await refreshDocuments();
       await refreshNotifications();
     };
     run();
-  }, [user, refreshTeams, refreshDocuments, refreshNotifications]);
+  }, [user, refreshDocuments, refreshNotifications]);
 
   const login = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -241,16 +217,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
       await refreshNotifications();
     }
-  };
-
-  const updateDocumentTeam = async (docId: string, teamId: string | null) => {
-    await documentService.updateDocumentTeam(docId, teamId);
-    await refreshDocuments();
-  };
-
-  const updateDocumentAssignment = async (docId: string, assignedTo: string | null, assignedToName: string | null) => {
-    await documentService.updateDocumentAssignment(docId, assignedTo, assignedToName);
-    await refreshDocuments();
   };
 
   const deleteDocumentAsync = async (docId: string) => {
@@ -296,46 +262,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
-  const createTeam = async (name: string) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user?.id) throw new Error('Not signed in');
-    const team = await teamService.createTeam(name.trim(), session.user.id);
-    await refreshTeams();
-    await refreshDocuments();
-    return team;
-  };
-
-  const addTeamMemberByEmail = async (teamId: string, email: string, role: 'manager' | 'member') => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user?.id) throw new Error('Not signed in');
-    await teamService.addTeamMemberByEmail(teamId, email, role, session.user.id);
-    await refreshTeams();
-    await refreshDocuments();
-  };
-
-  const removeTeamMember = async (teamId: string, userId: string) => {
-    await teamService.removeTeamMember(teamId, userId);
-    await refreshTeams();
-    await refreshDocuments();
-  };
-
-  const fetchTeamMembers = async (teamId: string) => {
-    return teamService.fetchTeamMembers(teamId);
-  };
-
-  const deleteTeam = async (teamId: string) => {
-    await teamService.deleteTeam(teamId);
-    await refreshTeams();
-    await refreshDocuments();
-  };
-
-  const transferOwnership = async (teamId: string, newAdminUserId: string) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user?.id) throw new Error('Not signed in');
-    await teamService.transferOwnership(teamId, newAdminUserId, session.user.id);
-    await refreshTeams();
-  };
-
   return (
     <AppContext.Provider
       value={{
@@ -346,19 +272,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         documents,
         refreshDocuments,
         updateDocumentStatus,
-        updateDocumentTeam,
-        updateDocumentAssignment,
         deleteDocument: deleteDocumentAsync,
         addComment: addCommentAsync,
         currentUserId,
-        teams,
-        refreshTeams,
-        createTeam,
-        addTeamMemberByEmail,
-        removeTeamMember,
-        deleteTeam,
-        transferOwnership,
-        fetchTeamMembers,
         notifications,
         refreshNotifications,
         markNotificationAsRead,

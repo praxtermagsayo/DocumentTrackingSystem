@@ -25,7 +25,7 @@ import { toast } from 'sonner';
 
 export function Dashboard() {
   const location = useLocation();
-  const { documents, searchQuery, currentUserId, teams, deleteDocument } = useApp();
+  const { documents, searchQuery, currentUserId, deleteDocument } = useApp();
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'signed' | 'rejected'>('all');
   const [docToDelete, setDocToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -268,7 +268,7 @@ export function Dashboard() {
                           {doc.title}
                         </Link>
                         <div className="mt-1 flex flex-wrap items-center gap-1.5 justify-start">
-                          <DocumentSourceBadge document={doc} currentUserId={currentUserId} teams={teams} />
+                          <DocumentSourceBadge document={doc} currentUserId={currentUserId} />
                         </div>
                         <p className="text-xs m-0 mt-0.5 text-left" style={mutedStyle}>
                           {doc.fileType} • {doc.fileSize}

@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router';
-import { ArrowLeft, Calendar, Plus, Clock, Tag, Trash2 } from 'lucide-react';
+import { Calendar, Plus, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import * as activityService from '../services/activities';
 import * as eventCategoryService from '../services/eventCategories';
 import type { Activity, EventCategory } from '../types';
-import { formatDateShort, formatTime } from '../lib/format';
+import { formatDate } from '../lib/format';
+import { PageTransition } from './page-transition';
+import { Skeleton } from './ui/skeleton';
 import { toast } from 'sonner';
 
 function toLocalDateOnly(d: Date): string {
@@ -140,7 +142,7 @@ export function Activities() {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <PageTransition className="space-y-6 max-w-4xl">
       <div className="flex items-center gap-3">
         <button
           onClick={() => navigate('/event-categories')}
@@ -165,8 +167,11 @@ export function Activities() {
           onClick={() => setShowCreateForm(!showCreateForm)}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
         >
-          <Plus className="size-4" />
-          {showCreateForm ? 'Cancel' : 'Post Activity'}
+          {showCreateForm ? 'Cancel' :
+            <>
+              <Plus className="size-4" />
+              <span>Post Activity</span>
+            </>}
         </button>
       </div>
 
@@ -177,7 +182,11 @@ export function Activities() {
             Post an activity
           </h2>
           {loading ? (
-            <p style={mutedStyle}>Loading categories...</p>
+            <div className="space-y-3">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-24 w-full" />
+            </div>
           ) : categories.length === 0 ? (
             <p style={mutedStyle}>
               <button
@@ -282,57 +291,58 @@ export function Activities() {
       )}
 
       <div className="rounded-lg shadow-sm border p-6" style={cardStyle}>
-        <h2 className="text-lg font-semibold mb-4" style={textStyle}>My activities</h2>
+        <h2 className="text-lg font-semibold mb-4" style={textStyle}>List of Events</h2>
         {loading ? (
           <p style={mutedStyle}>Loading...</p>
         ) : activities.length === 0 ? (
-          <p style={mutedStyle}>No activities yet. Post one above.</p>
+          <p style={mutedStyle}>No events yet. Post one above.</p>
         ) : (
-          <ul className="space-y-4">
-            {activities.map((act) => {
-              const catName = categories.find((c) => c.id === act.categoryId)?.name ?? 'Unknown';
-              return (
-              <li
-                key={act.id}
-                className="p-4 rounded-lg flex flex-wrap items-start gap-4"
-                style={{ backgroundColor: 'var(--muted)' }}
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2 mb-2">
-                    <span
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-blue-500/20 text-blue-700 dark:text-blue-400"
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  <th className="text-left py-3 px-4 font-medium" style={textStyle}>Event Name</th>
+                  <th className="text-left py-3 px-4 font-medium" style={textStyle}>Event Start</th>
+                  <th className="text-left py-3 px-4 font-medium" style={textStyle}>Event End</th>
+                  <th className="w-10" />
+                </tr>
+              </thead>
+              <tbody>
+                {activities.map((act) => {
+                  const catName = categories.find((c) => c.id === act.categoryId)?.name ?? 'Unknown';
+                  const eventName = act.description?.trim() || catName || '—';
+                  const dateTimeOpts = { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' as const };
+                  return (
+                    <tr
+                      key={act.id}
+                      style={{ borderBottom: '1px solid var(--border)' }}
+                      className="hover:bg-[var(--muted)]/50 transition-colors"
                     >
-                      <Tag className="size-3" />
-                      {catName}
-                    </span>
-                    <span className="text-xs" style={mutedStyle}>
-                      Posted {formatDateShort(act.postDate)}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-4 text-sm" style={mutedStyle}>
-                    <span>{formatDateShort(new Date(act.eventStart).toISOString().slice(0, 10))}</span>
-                    <span className="flex items-center gap-1">
-                      <Clock className="size-3" />
-                      {formatTime(act.eventStart)} – {formatTime(act.eventEnd)}
-                    </span>
-                  </div>
-                  {act.description && (
-                    <p className="mt-2 text-sm" style={textStyle}>{act.description}</p>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(act.id)}
-                  className="p-2 rounded-lg text-red-600 dark:text-red-400 hover:opacity-80 shrink-0"
-                  title="Delete"
-                >
-                  <Trash2 className="size-4" />
-                </button>
-              </li>
-            );})}
-          </ul>
+                      <td className="py-3 px-4" style={textStyle}>{eventName}</td>
+                      <td className="py-3 px-4" style={mutedStyle}>
+                        {formatDate(act.eventStart, dateTimeOpts)}
+                      </td>
+                      <td className="py-3 px-4" style={mutedStyle}>
+                        {formatDate(act.eventEnd, dateTimeOpts)}
+                      </td>
+                      <td className="py-3 px-4">
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(act.id)}
+                          className="p-2 rounded-lg text-red-600 dark:text-red-400 hover:opacity-80"
+                          title="Delete"
+                        >
+                          <Trash2 className="size-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
-    </div>
+    </PageTransition>
   );
 }

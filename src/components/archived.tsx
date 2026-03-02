@@ -3,6 +3,7 @@ import { FileText, RotateCcw } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { documentMatchesSearch } from '../lib/search';
 import { DocumentSourceBadge } from './document-source-badge';
+import { PageTransition } from './page-transition';
 
 export function Archived() {
   const location = useLocation();
@@ -57,7 +58,7 @@ export function Archived() {
   };
 
   return (
-    <div className="space-y-6">
+    <PageTransition className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold" style={textStyle}>Archived Documents</h1>
         <p className="mt-1" style={mutedStyle}>Documents that have been archived</p>
@@ -141,6 +142,6 @@ export function Archived() {
           </table>
         </div>
       </div>
-    </div>
+    </PageTransition>
   );
 }

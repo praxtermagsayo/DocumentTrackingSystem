@@ -13,6 +13,8 @@
 
   Documents, notifications, and uploads use Supabase. Configure `.env` with `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY`, then run **`supabase-schema.sql`** in the Supabase SQL Editor once to create tables and storage. See **SUPABASE_GUIDE.md** for details.
 
+  For **Reset Password** to work, add your app URL plus `/update-password` to Supabase Auth → URL Configuration → Redirect URLs (e.g. `https://yoursite.com/update-password`).
+
   ## Delete Account (Edge Function)
 
   The "Delete Account" feature requires:

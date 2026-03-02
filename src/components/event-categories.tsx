@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabase';
 import * as eventCategoryService from '../services/eventCategories';
 import type { EventCategory, EventCategoryStatus } from '../types';
 import { toast } from 'sonner';
+import { PageTransition } from './page-transition';
+import { Skeleton } from './ui/skeleton';
 
 export function EventCategories() {
   const navigate = useNavigate();
@@ -95,7 +97,7 @@ export function EventCategories() {
   };
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <PageTransition className="space-y-6 max-w-3xl">
       <div className="flex items-center gap-3">
         <button
           onClick={() => navigate('/activities')}
@@ -161,9 +163,13 @@ export function EventCategories() {
       </div>
 
       <div className="rounded-lg shadow-sm border p-6" style={cardStyle}>
-        <h2 className="text-lg font-semibold mb-4" style={textStyle}>My categories</h2>
+        <h2 className="text-lg font-semibold mb-4" style={textStyle}>List of Categories</h2>
         {loading ? (
-          <p style={mutedStyle}>Loading...</p>
+          <div className="space-y-3">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
         ) : categories.length === 0 ? (
           <p style={mutedStyle}>No categories yet. Create one above.</p>
         ) : (
@@ -245,6 +251,6 @@ export function EventCategories() {
           </ul>
         )}
       </div>
-    </div>
+    </PageTransition>
   );
 }

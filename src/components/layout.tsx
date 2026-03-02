@@ -3,9 +3,6 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard,
   FileText,
-  Inbox,
-  Send,
-  File,
   Archive,
   Search,
   HelpCircle,
@@ -32,6 +29,7 @@ export function Layout() {
     searchQuery,
     setSearchQuery,
   } = useApp();
+  const isDocumentRepository = location.pathname === '/documents';
   const [showUserMenu, setShowUserMenu] = useState(false);
 
   // Check authentication
@@ -50,10 +48,7 @@ export function Layout() {
 
   const navItems = [
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-    { path: '/documents', label: 'My Documents', icon: FileText },
-    { path: '/inbox', label: 'Inbox', icon: Inbox },
-    { path: '/sent', label: 'Sent', icon: Send },
-    { path: '/drafts', label: 'Drafts', icon: File },
+    { path: '/documents', label: 'Document Repository', icon: FileText },
     { path: '/archived', label: 'Archived', icon: Archive },
   ];
 
@@ -102,7 +97,7 @@ export function Layout() {
               <Link
                 key={item.path}
                 to={item.path}
-                className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors"
+                className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-app"
                 style={
                   active
                     ? { backgroundColor: 'var(--sidebar-accent)', color: 'var(--sidebar-primary)' }
@@ -144,7 +139,7 @@ export function Layout() {
                   <Link
                     key={item.path}
                     to={item.path}
-                    className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors"
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-app"
                     style={
                       active
                         ? { backgroundColor: 'var(--sidebar-accent)', color: 'var(--sidebar-primary)' }
@@ -176,7 +171,7 @@ export function Layout() {
         <div className="px-3 pb-3 border-t" style={{ borderColor: 'var(--sidebar-border)' }}>
           <button
             onClick={() => navigate('/settings')}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors hover:opacity-90"
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-app hover:opacity-90"
             style={{ color: 'var(--sidebar-foreground)' }}
             onMouseEnter={(e) => {
               e.currentTarget.style.backgroundColor = 'var(--sidebar-accent)';
@@ -261,64 +256,65 @@ export function Layout() {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top Bar */}
+        {/* App bar / Top bar */}
         <header
           className="h-16 flex items-center justify-between px-8 border-b"
           style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}
         >
-          {/* Search */}
-          <div className="flex-1 max-w-2xl">
-            <div className="relative">
-              <Search
-                className="absolute left-3 top-1/2 -translate-y-1/2 size-4 pointer-events-none"
-                style={{ color: 'var(--muted-foreground)' }}
-              />
-              <input
-                type="text"
-                placeholder="Search by file name, ID, or status... (Enter for full search)"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const path = searchQuery.trim()
-                      ? `/documents?q=${encodeURIComponent(searchQuery.trim())}`
-                      : '/documents';
-                    navigate(path);
-                  }
-                }}
-                className="w-full pl-10 pr-10 py-2 text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                style={{
-                  backgroundColor: 'var(--input-background)',
-                  borderColor: 'var(--border)',
-                  color: 'var(--foreground)',
-                }}
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded hover:opacity-80 transition-opacity"
+          {!isDocumentRepository ? (
+            <div className="flex-1 max-w-2xl">
+              <div className="relative">
+                <Search
+                  className="absolute left-3 top-1/2 -translate-y-1/2 size-4 pointer-events-none"
                   style={{ color: 'var(--muted-foreground)' }}
-                  aria-label="Clear search"
-                >
-                  <X className="size-4" />
-                </button>
-              )}
+                />
+                <input
+                  type="text"
+                  placeholder="Search by file name, ID, or status... (Enter for full search)"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const path = searchQuery.trim()
+                        ? `/documents?q=${encodeURIComponent(searchQuery.trim())}`
+                        : '/documents';
+                      navigate(path);
+                    }
+                  }}
+                  className="w-full pl-10 pr-10 py-2 text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                  style={{
+                    backgroundColor: 'var(--input-background)',
+                    borderColor: 'var(--border)',
+                    color: 'var(--foreground)',
+                  }}
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded hover:opacity-80 transition-opacity"
+                    style={{ color: 'var(--muted-foreground)' }}
+                    aria-label="Clear search"
+                  >
+                    <X className="size-4" />
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-
-          {/* Actions */}
+          ) : (
+            <div className="flex-1" />
+          )}
           <div className="flex items-center gap-3 ml-6">
             <button
               onClick={() => navigate('/help')}
-              className="p-2 rounded-lg transition-colors hover:opacity-80"
+              className="p-2 rounded-lg transition-app hover:opacity-80"
               style={{ color: 'var(--muted-foreground)' }}
             >
               <HelpCircle className="size-5" />
             </button>
             <button
               onClick={() => navigate('/notifications')}
-              className="p-2 rounded-lg transition-colors hover:opacity-80 relative"
+              className="p-2 rounded-lg transition-app hover:opacity-80 relative"
               style={{ color: 'var(--muted-foreground)' }}
             >
               <Bell className="size-5" />
@@ -330,7 +326,7 @@ export function Layout() {
             </button>
             <Link
               to="/upload"
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-app text-sm font-medium"
             >
               <Plus className="size-4" />
               Upload New

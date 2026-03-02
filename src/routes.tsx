@@ -1,14 +1,13 @@
 import { createBrowserRouter, Navigate } from 'react-router';
 import { Layout } from './components/layout';
 import { Login } from './components/login';
+import { ForgotPassword } from './components/forgot-password';
+import { UpdatePassword } from './components/update-password';
 import { Register } from './components/register';
 import { Dashboard } from './components/dashboard';
-import { DocumentsList } from './components/documents-list';
+import { DocumentRepository } from './components/document-repository';
 import { DocumentDetail } from './components/document-detail';
 import { UploadDocument } from './components/upload-document';
-import { Inbox } from './components/inbox';
-import { Sent } from './components/sent';
-import { Drafts } from './components/drafts';
 import { Archived } from './components/archived';
 import { Notifications } from './components/notifications';
 import { Activities } from './components/activities';
@@ -36,16 +35,21 @@ export const router = createBrowserRouter([
     Component: Register,
   },
   {
+    path: '/forgot-password',
+    Component: ForgotPassword,
+  },
+  {
+    path: '/update-password',
+    Component: UpdatePassword,
+  },
+  {
     path: '/',
     element: <ProtectedRoute />,
     children: [
       { index: true, Component: Dashboard },
-      { path: 'documents', Component: DocumentsList },
+      { path: 'documents', Component: DocumentRepository },
       { path: 'documents/:id', Component: DocumentDetail },
       { path: 'upload', Component: UploadDocument },
-      { path: 'inbox', Component: Inbox },
-      { path: 'sent', Component: Sent },
-      { path: 'drafts', Component: Drafts },
       { path: 'archived', Component: Archived },
       { path: 'notifications', Component: Notifications },
       { path: 'activities', Component: Activities },

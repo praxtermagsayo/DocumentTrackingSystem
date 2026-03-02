@@ -42,6 +42,22 @@ export function formatNotificationTime(timestamp: string): string {
   return date.toLocaleDateString();
 }
 
+/** Relative time like "3d ago", "10m ago" for dashboard/activity */
+export function formatRelativeTime(timestamp: string): string {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diff = now.getTime() - date.getTime();
+  const mins = Math.floor(diff / (1000 * 60));
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  if (days < 7) return `${days}d ago`;
+  if (days < 30) return `${Math.floor(days / 7)}w ago`;
+  return date.toLocaleDateString();
+}
+
 export function getStatusColor(status: DocumentStatus): string {
   switch (status) {
     case 'approved':

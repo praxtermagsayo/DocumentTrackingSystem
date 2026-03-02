@@ -118,9 +118,9 @@ export function Login() {
                 />
                 <span className="text-sm" style={mutedStyle}>Remember me</span>
               </label>
-              <button type="button" className="text-sm text-blue-600 dark:text-blue-400 hover:opacity-80 font-medium">
+              <Link to="/forgot-password" className="text-sm text-blue-600 dark:text-blue-400 hover:opacity-80 font-medium">
                 Forgot password?
-              </button>
+              </Link>
             </div>
 
             <button

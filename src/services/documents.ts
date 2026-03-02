@@ -239,3 +239,57 @@ export async function fetchDocumentHistory(documentId: string): Promise<{ id: st
     timestamp: row.created_at,
   }));
 }
+
+export interface RecentActivityItem {
+  id: string;
+  documentId: string;
+  documentTitle: string;
+  action: string;
+  updatedBy: string;
+  timestamp: string;
+}
+
+function statusToAction(status: string): string {
+  switch (status) {
+    case 'draft': return 'created';
+    case 'under-review': return 'submitted for review';
+    case 'approved': return 'approved';
+    case 'rejected': return 'rejected';
+    case 'archived': return 'archived';
+    default: return 'updated';
+  }
+}
+
+export async function fetchRecentActivity(limit = 10): Promise<RecentActivityItem[]> {
+  const { data, error } = await supabase
+    .from('document_history')
+    .select('id, document_id, status, comment, updated_by, created_at, documents(title)')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  const rows = (data || []) as Array<{
+    id: string;
+    document_id: string;
+    status: string;
+    comment: string;
+    updated_by: string;
+    created_at: string;
+    documents: { title?: string } | null;
+  }>;
+  return rows.map((row) => {
+    const doc = row.documents;
+    const title = doc?.title ?? 'Unknown document';
+    let action = statusToAction(row.status);
+    if (row.comment && row.comment !== 'Document created' && row.comment !== 'Status updated') {
+      action += `: ${row.comment}`;
+    }
+    return {
+      id: row.id,
+      documentId: row.document_id,
+      documentTitle: title,
+      action,
+      updatedBy: row.updated_by,
+      timestamp: row.created_at,
+    };
+  });
+}

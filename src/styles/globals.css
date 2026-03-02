@@ -213,3 +213,88 @@
 html {
   font-size: var(--font-size);
 }
+
+/* Dashboard - refined modern layout */
+.dashboard-page {
+  min-height: 100%;
+}
+:root:not(.dark) .dashboard-page {
+  background: radial-gradient(ellipse 80% 40% at 50% 0%, rgba(59, 130, 246, 0.035), transparent);
+}
+.dark .dashboard-page {
+  background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59, 130, 246, 0.08), transparent);
+}
+.dashboard-stat-card {
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.dashboard-stat-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 3px 0 0 3px;
+}
+.dashboard-stat-card.draft::before { background: linear-gradient(180deg, #f59e0b, #d97706); }
+.dashboard-stat-card.review::before { background: linear-gradient(180deg, #3b82f6, #2563eb); }
+.dashboard-stat-card.approved::before { background: linear-gradient(180deg, #22c55e, #16a34a); }
+.dashboard-stat-card.archived::before { background: linear-gradient(180deg, #64748b, #475569); }
+.dashboard-stat-card.rejected::before { background: linear-gradient(180deg, #ef4444, #dc2626); }
+.dashboard-stat-card-inner {
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.dashboard-stat-card-inner:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.08);
+}
+.dark .dashboard-stat-card {
+  border-color: color-mix(in oklch, var(--border) 80%, transparent);
+}
+.dark .dashboard-stat-card-inner {
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.15);
+}
+.dark .dashboard-stat-card-inner:hover {
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.25);
+}
+.dashboard-panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.04);
+  transition: box-shadow 0.2s ease;
+}
+.dark .dashboard-panel {
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.15);
+}
+.dashboard-panel:hover {
+  box-shadow: 0 4px 12px -2px rgb(0 0 0 / 0.08), 0 2px 6px -2px rgb(0 0 0 / 0.04);
+}
+.dark .dashboard-panel:hover {
+  box-shadow: 0 4px 24px -4px rgb(0 0 0 / 0.2);
+}
+.dashboard-action-bar {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 16px;
+  gap: 12px;
+}
+.dark .dashboard-action-bar {
+  background: color-mix(in oklch, var(--card) 95%, var(--accent) 5%);
+}
+.dashboard-search-wrapper {
+  flex: 1;
+  min-width: 200px;
+  max-width: 320px;
+}
+.dashboard-search-wrapper input {
+  border-radius: 10px;
+  background: var(--input-background);
+}
+.dark .dashboard-search-wrapper input {
+  background: color-mix(in oklch, var(--input-background) 80%, transparent);
+}

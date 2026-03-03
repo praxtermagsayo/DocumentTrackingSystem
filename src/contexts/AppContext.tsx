@@ -21,6 +21,8 @@ interface AppContextType {
   // Authentication
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
+  /** Sign in with Google (Gmail) OAuth */
+  signInWithGoogle: () => Promise<void>;
   logout: () => void;
   user: {
     name: string;
@@ -162,6 +164,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setIsAuthenticated(true);
         setUser(mapSupabaseUser(session.user));
         setCurrentUserId(session.user.id);
+        upsertProfile(session.user);
       } else {
         setIsAuthenticated(false);
         setUser(null);
@@ -192,6 +195,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setCurrentUserId(data.user.id);
       await upsertProfile(data.user);
     }
+  };
+
+  const signInWithGoogle = async () => {
+    const redirectTo = `${window.location.origin}/login`;
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo },
+    });
+    if (error) throw error;
+    if (data?.url) window.location.href = data.url;
   };
 
   const logout = async () => {
@@ -267,6 +280,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       value={{
         isAuthenticated,
         login,
+        signInWithGoogle,
         logout,
         user,
         documents,

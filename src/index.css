@@ -2085,10 +2085,6 @@ html {
   font-size: var(--font-size);
 }
 
-text-sm text-slate-600 mb-1:hover {
-  transform: scale(1px);
-  animation: none;
-}
 
 @property --tw-translate-x {
   syntax: "*";

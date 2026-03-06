@@ -17,7 +17,7 @@ export interface Notification {
   link?: string | null;
 }
 
-interface AppContextType {
+export interface AppContextType {
   // Authentication
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;

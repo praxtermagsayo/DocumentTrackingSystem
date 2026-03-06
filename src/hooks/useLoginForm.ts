@@ -23,6 +23,10 @@ export function useLoginForm(login: AppContextType['login'], isAuthenticated: bo
         await login(email.trim(), password);
         navigate('/', { replace: true });
       } catch (err: unknown) {
+        // Play failure sound
+        const audio = new Audio('/nope.mp3');
+        audio.play().catch(e => console.error('Error playing sound:', e));
+
         const message = err instanceof Error ? err.message : 'Invalid email or password.';
         setError(message);
       } finally {

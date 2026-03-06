@@ -1,9 +1,7 @@
 import { createBrowserRouter, Navigate } from 'react-router';
 import { Layout } from './components/layout';
-import { Login } from './components/login';
-import { ForgotPassword } from './components/forgot-password';
+import { AuthLayout } from './components/auth-layout';
 import { UpdatePassword } from './components/update-password';
-import { Register } from './components/register';
 import { Dashboard } from './components/dashboard';
 import { DocumentRepository } from './components/document-repository';
 import { DocumentDetail } from './components/document-detail';
@@ -28,15 +26,15 @@ function ProtectedRoute() {
 export const router = createBrowserRouter([
   {
     path: '/login',
-    Component: Login,
+    Component: AuthLayout,
   },
   {
     path: '/register',
-    Component: Register,
+    element: <Navigate to="/login?view=register" replace />,
   },
   {
     path: '/forgot-password',
-    Component: ForgotPassword,
+    element: <Navigate to="/login?view=forgot" replace />,
   },
   {
     path: '/update-password',

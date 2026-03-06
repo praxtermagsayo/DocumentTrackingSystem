@@ -112,3 +112,120 @@
 .skeleton-rounded {
   border-radius: 9999px;
 }
+
+/* Auth layout: sliding panes and glassmorphism */
+@keyframes auth-slide-in-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes auth-slide-in-from-left {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes auth-slide-out-to-left {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+}
+
+@keyframes auth-slide-out-to-right {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+
+.auth-pane-enter-right {
+  animation: auth-slide-in-from-right 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.auth-pane-enter-left {
+  animation: auth-slide-in-from-left 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.auth-pane-exit-left {
+  animation: auth-slide-out-to-left 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  pointer-events: none;
+}
+
+.auth-pane-exit-right {
+  animation: auth-slide-out-to-right 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  pointer-events: none;
+}
+
+/* Auth overlay transition now handled via CSS transitions in auth-layout.tsx */
+
+/* Forgot password: slide up from bottom / slide down to bottom */
+@keyframes auth-slide-in-from-bottom {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes auth-slide-out-to-bottom {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+}
+
+.auth-pane-enter-up {
+  animation: auth-slide-in-from-bottom 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.auth-pane-exit-down {
+  animation: auth-slide-out-to-bottom 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  pointer-events: none;
+}
+
+/* Glassmorphism card */
+.auth-glass {
+  background: color-mix(in oklch, var(--card) 75%, transparent 25%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid color-mix(in oklch, var(--border) 60%, transparent 40%);
+  box-shadow:
+    0 8px 32px rgb(0 0 0 / 0.08),
+    0 2px 8px rgb(0 0 0 / 0.04),
+    inset 0 1px 0 color-mix(in oklch, white 15%, transparent 85%);
+}
+
+.dark .auth-glass {
+  background: color-mix(in oklch, var(--card) 70%, transparent 30%);
+  border: 1px solid color-mix(in oklch, var(--border) 50%, transparent 50%);
+  box-shadow:
+    0 8px 32px rgb(0 0 0 / 0.25),
+    inset 0 1px 0 color-mix(in oklch, white 8%, transparent 92%);
+}

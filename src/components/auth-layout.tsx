@@ -55,7 +55,7 @@ export function AuthLayout() {
     position: 'relative',
     width: '100%',
     maxWidth: '60rem',
-    height: '720px',
+    height: '760px',
     borderRadius: '2.5rem',
     boxShadow: '0 25px 50px -12px rgba(0,0,0,0.15)',
     overflow: 'hidden',
@@ -74,7 +74,11 @@ export function AuthLayout() {
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1,
-    overflow: 'hidden',
+    overflowY: 'auto',
+    paddingTop: '1.5rem',
+    paddingBottom: '1.5rem', 
+    scrollbarWidth: 'none',
+    msOverflowStyle: 'none',
   };
 
   const rightPanelStyle: CSSProperties = {
@@ -87,7 +91,11 @@ export function AuthLayout() {
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1,
-    overflow: 'hidden',
+    overflowY: 'auto',
+    paddingTop: '1.5rem',
+    paddingBottom: '1.5rem', 
+    scrollbarWidth: 'none',
+    msOverflowStyle: 'none',
   };
 
   // Overlay panel

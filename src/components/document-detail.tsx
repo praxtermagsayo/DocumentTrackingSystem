@@ -17,6 +17,8 @@ import {
   FileDown,
   MessageSquare,
   Loader2,
+  Paperclip,
+  ExternalLink,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
@@ -40,6 +42,7 @@ import {
 } from './ui/select';
 import { useDocumentDetail } from '../hooks/useDocumentDetail';
 import { formatDate, getStatusColor, getStatusLabel } from '../lib/format';
+import { getFileUrl } from '../services/documents';
 import { toast } from 'sonner';
 
 export function DocumentDetail() {
@@ -48,6 +51,23 @@ export function DocumentDetail() {
   const location = useLocation();
   const { updateDocumentStatus, deleteDocument, addComment, documents, currentUserId } = useApp();
   const document = documents.find((d) => d.id === id);
+  // Find all files in the same upload batch
+  const batchFiles = document
+    ? documents.filter((d) => d.trackingId === document.trackingId)
+    : [];
+
+  const handleOpenFile = async (filePath?: string) => {
+    if (!filePath) {
+      toast.info('No file available to view');
+      return;
+    }
+    const url = await getFileUrl(filePath);
+    if (url) {
+      window.open(url, '_blank');
+    } else {
+      toast.error('Could not load file. The storage bucket may not exist yet.');
+    }
+  };
 
   const {
     history,
@@ -230,29 +250,11 @@ export function DocumentDetail() {
               </div>
               <div className="flex items-start gap-3">
                 <div className="mt-1 p-2 rounded-lg" style={iconBgStyle}>
-                  <FileType className="size-4 text-blue-600 dark:text-blue-400" />
-                </div>
-                <div>
-                  <p className="text-xs" style={mutedStyle}>File Type</p>
-                  <p className="mt-1 font-medium" style={textStyle}>{document.fileType}</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="mt-1 p-2 rounded-lg" style={iconBgStyle}>
-                  <HardDrive className="size-4 text-blue-600 dark:text-blue-400" />
-                </div>
-                <div>
-                  <p className="text-xs" style={mutedStyle}>File Size</p>
-                  <p className="mt-1 font-medium" style={textStyle}>{document.fileSize}</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="mt-1 p-2 rounded-lg" style={iconBgStyle}>
                   <User className="size-4 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div>
-                  <p className="text-xs" style={mutedStyle}>Created By</p>
-                  <p className="mt-1 font-medium" style={textStyle}>{document.createdBy}</p>
+                  <p className="text-xs" style={mutedStyle}>Sent by</p>
+                  <p className="mt-1 font-medium" style={textStyle}>{document.ownerName}</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
@@ -260,7 +262,7 @@ export function DocumentDetail() {
                   <Calendar className="size-4 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div>
-                  <p className="text-xs" style={mutedStyle}>Created At</p>
+                  <p className="text-xs" style={mutedStyle}>Created</p>
                   <p className="mt-1 font-medium" style={textStyle}>{formatDate(document.createdAt)}</p>
                 </div>
               </div>
@@ -273,6 +275,64 @@ export function DocumentDetail() {
                   <p className="mt-1 font-medium" style={textStyle}>{formatDate(document.updatedAt)}</p>
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* Attached Files */}
+          <div className="rounded-lg shadow-sm border p-6" style={cardStyle}>
+            <div className="flex items-center gap-2 mb-4">
+              <Paperclip className="size-5 text-blue-600 dark:text-blue-400" />
+              <h3 className="text-lg font-semibold" style={textStyle}>
+                Attached Files
+                {batchFiles.length > 1 && (
+                  <span className="ml-2 text-sm font-normal" style={mutedStyle}>({batchFiles.length} files)</span>
+                )}
+              </h3>
+            </div>
+            <div className="space-y-3">
+              {batchFiles.map((file) => {
+                const fileIconColor =
+                  file.fileType === 'PDF' ? 'text-red-600' :
+                    file.fileType === 'XLSX' ? 'text-green-600' :
+                      (file.fileType === 'DOC' || file.fileType === 'DOCX') ? 'text-blue-600' :
+                        file.fileType === 'IMG' ? 'text-purple-600' : 'text-slate-600';
+                const fileIconBg =
+                  file.fileType === 'PDF' ? 'bg-red-500/15' :
+                    file.fileType === 'XLSX' ? 'bg-green-500/15' :
+                      (file.fileType === 'DOC' || file.fileType === 'DOCX') ? 'bg-blue-500/15' :
+                        file.fileType === 'IMG' ? 'bg-purple-500/15' : 'bg-slate-500/15';
+
+                return (
+                  <div
+                    key={file.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => handleOpenFile(file.filePath)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleOpenFile(file.filePath); }}
+                    className="flex items-center gap-3 p-4 rounded-lg border transition-all hover:shadow-md hover:border-blue-300 dark:hover:border-blue-600 cursor-pointer group"
+                    style={{ backgroundColor: 'var(--muted)', borderColor: 'var(--border)' }}
+                  >
+                    <div className={`p-2 rounded-lg ${fileIconBg}`}>
+                      <FileText className={`size-5 ${fileIconColor}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" style={textStyle} title={file.originalFilename || file.title}>
+                        {file.originalFilename || file.title}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs whitespace-nowrap" style={mutedStyle}>
+                      <span className="px-2 py-1 rounded-md bg-black/5 dark:bg-white/5 font-semibold" style={textStyle}>
+                        {file.fileType}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <HardDrive className="size-3" />
+                        {file.fileSize}
+                      </span>
+                      <ExternalLink className="size-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-blue-600 dark:text-blue-400" />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -374,9 +434,13 @@ export function DocumentDetail() {
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete document?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {batchFiles.length > 1 ? `Delete all ${batchFiles.length} files?` : 'Delete document?'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. The document &quot;{document.title}&quot; will be permanently removed from the system.
+              {batchFiles.length > 1
+                ? `This action cannot be undone. All ${batchFiles.length} files in this upload will be permanently removed from the system.`
+                : `This action cannot be undone. The document "${document.title}" will be permanently removed from the system.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

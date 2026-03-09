@@ -20,6 +20,7 @@ export interface Notification {
 export interface AppContextType {
   // Authentication
   isAuthenticated: boolean;
+  needsOnboarding: boolean;
   login: (email: string, password: string) => Promise<void>;
   /** Sign in with Google (Gmail) OAuth */
   signInWithGoogle: () => Promise<void>;
@@ -62,6 +63,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [user, setUser] = useState<AppContextType['user']>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -151,6 +153,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setIsAuthenticated(true);
+        setNeedsOnboarding(!session.user.user_metadata?.role);
         setUser(mapSupabaseUser(session.user));
         setCurrentUserId(session.user.id);
         upsertProfile(session.user);
@@ -162,11 +165,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setIsAuthenticated(true);
+        setNeedsOnboarding(!session.user.user_metadata?.role);
         setUser(mapSupabaseUser(session.user));
         setCurrentUserId(session.user.id);
         upsertProfile(session.user);
       } else {
         setIsAuthenticated(false);
+        setNeedsOnboarding(false);
         setUser(null);
         setCurrentUserId(null);
         setDocuments([]);
@@ -279,6 +284,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     <AppContext.Provider
       value={{
         isAuthenticated,
+        needsOnboarding,
         login,
         signInWithGoogle,
         logout,

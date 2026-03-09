@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { FileText, Mail, Lock, Eye, EyeOff, User, Building2, Phone } from 'lucide-react';
+import { FileText, Mail, Lock, Eye, EyeOff, User, Phone, ShieldHalf } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { useRegisterForm } from '../hooks/useRegisterForm';
 
@@ -217,8 +217,8 @@ export function Register({ embedded = false }: { embedded?: boolean }) {
           </div>
         </div>
 
-        {/* Phone */}
-        <div>
+        {/* Phone and Role */}
+        <div className={gridClass}>
           <div className='mb-2'>
             <label htmlFor="phone" className={`block text-sm font-medium ${labelMb}`} style={textStyle}>
               Phone Number
@@ -235,6 +235,33 @@ export function Register({ embedded = false }: { embedded?: boolean }) {
                 className={`w-full pl-10 pr-4 ${inputPy} border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
                 style={inputStyle}
               />
+            </div>
+          </div>
+
+          <div className='mb-2'>
+            <label htmlFor="role" className={`block text-sm font-medium ${labelMb}`} style={textStyle}>
+              Role <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <ShieldHalf className="absolute left-3 top-1/2 -translate-y-1/2 size-5 pointer-events-none" style={mutedStyle} />
+              <select
+                id="role"
+                name="role"
+                value={formData.role || 'user'}
+                onChange={handleChange}
+                className={`w-full pl-10 pr-10 ${inputPy} border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none`}
+                style={{
+                  ...inputStyle,
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='currentColor'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
+                  backgroundSize: '1rem',
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 1rem center'
+                }}
+                required
+              >
+                <option value="user">User</option>
+                <option value="admin">Admin</option>
+              </select>
             </div>
           </div>
         </div>

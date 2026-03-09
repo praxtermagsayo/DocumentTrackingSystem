@@ -15,6 +15,9 @@ import {
   X,
   Calendar,
   Tag,
+  FolderOpen,
+  FileBarChart,
+  ChevronRight,
 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 
@@ -31,6 +34,7 @@ export function Layout() {
   } = useApp();
   const isDocumentRepository = location.pathname === '/documents';
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showReportMenu, setShowReportMenu] = useState(true);
 
   // Check authentication
   useEffect(() => {
@@ -50,10 +54,11 @@ export function Layout() {
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/documents', label: 'Document Repository', icon: FileText },
     { path: '/archived', label: 'Archived', icon: Archive },
+    { path: '/document-categories', label: 'Document Categories', icon: FolderOpen },
   ];
 
   const scheduleItems = [
-    { path: '/activities', label: 'Activities', icon: Calendar },
+    { path: '/activities', label: 'Events', icon: Calendar },
     { path: '/event-categories', label: 'Event Categories', icon: Tag },
   ];
 
@@ -102,8 +107,8 @@ export function Layout() {
                   active
                     ? { backgroundColor: 'var(--sidebar-accent)', color: 'var(--sidebar-primary)' }
                     : {
-                        color: 'var(--sidebar-foreground)',
-                      }
+                      color: 'var(--sidebar-foreground)',
+                    }
                 }
                 onMouseEnter={(e) => {
                   if (!active) {
@@ -163,6 +168,35 @@ export function Layout() {
                   </Link>
                 );
               })}
+            </div>
+
+            <div className="pt-6 pb-2">
+              <p
+                className="px-3 text-xs font-semibold uppercase tracking-wider mb-2"
+                style={{ color: 'var(--muted-foreground)' }}
+              >
+                Reports
+              </p>
+              <div className="space-y-1">
+                <a
+                  href="/schedule-report"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-app"
+                  style={{ color: 'var(--sidebar-foreground)' }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = 'var(--sidebar-accent)';
+                    e.currentTarget.style.color = 'var(--sidebar-accent-foreground)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = '';
+                    e.currentTarget.style.color = 'var(--sidebar-foreground)';
+                  }}
+                >
+                  <FileBarChart className="size-5" />
+                  List of Activities
+                </a>
+              </div>
             </div>
           </div>
         </nav>

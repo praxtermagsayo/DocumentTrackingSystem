@@ -1,6 +1,7 @@
-import { createBrowserRouter, Navigate } from 'react-router';
+import { createBrowserRouter, Navigate, useLocation } from 'react-router';
 import { Layout } from './components/layout';
 import { AuthLayout } from './components/auth-layout';
+import { OnboardingLayout } from './components/onboarding-layout';
 import { UpdatePassword } from './components/update-password';
 import { Dashboard } from './components/dashboard';
 import { DocumentRepository } from './components/document-repository';
@@ -10,17 +11,27 @@ import { Archived } from './components/archived';
 import { Notifications } from './components/notifications';
 import { Activities } from './components/activities';
 import { EventCategories } from './components/event-categories';
+import { DocumentCategories } from './components/document-categories';
+import { ScheduleReport } from './components/schedule-report';
 import { Settings } from './components/settings';
 import { Account } from './components/account';
 import { Help } from './components/help';
 import { useApp } from './contexts/AppContext';
 
-function ProtectedRoute() {
-  const { isAuthenticated } = useApp();
+function ProtectedRoute({ children }: { children?: React.ReactNode }) {
+  const { isAuthenticated, needsOnboarding } = useApp();
+  const location = useLocation();
+
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
-  return <Layout />;
+
+  // If the user hasn't finished onboarding and they aren't already on the onboarding page
+  if (needsOnboarding && location.pathname !== '/onboarding') {
+    return <Navigate to="/onboarding" replace />;
+  }
+
+  return children ? <>{children}</> : <Layout />;
 }
 
 export const router = createBrowserRouter([
@@ -31,6 +42,10 @@ export const router = createBrowserRouter([
   {
     path: '/register',
     element: <Navigate to="/login?view=register" replace />,
+  },
+  {
+    path: '/onboarding',
+    Component: OnboardingLayout,
   },
   {
     path: '/forgot-password',
@@ -52,9 +67,18 @@ export const router = createBrowserRouter([
       { path: 'notifications', Component: Notifications },
       { path: 'activities', Component: Activities },
       { path: 'event-categories', Component: EventCategories },
+      { path: 'document-categories', Component: DocumentCategories },
       { path: 'settings', Component: Settings },
       { path: 'account', Component: Account },
       { path: 'help', Component: Help },
     ],
+  },
+  {
+    path: '/schedule-report',
+    element: (
+      <ProtectedRoute>
+        <ScheduleReport />
+      </ProtectedRoute>
+    ),
   },
 ]);

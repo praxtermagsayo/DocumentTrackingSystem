@@ -143,13 +143,15 @@ export function Activities() {
 
   return (
     <PageTransition className="space-y-6 max-w-4xl">
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => navigate('/event-categories')}
-          className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
-        >
-          Manage Categories
-        </button>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate('/event-categories')}
+            className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            Manage Categories
+          </button>
+        </div>
       </div>
 
       <div className="flex items-center justify-between">
@@ -311,7 +313,13 @@ export function Activities() {
                 {activities.map((act) => {
                   const catName = categories.find((c) => c.id === act.categoryId)?.name ?? 'Unknown';
                   const eventName = act.description?.trim() || catName || '—';
-                  const dateTimeOpts = { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' as const };
+                  const dateTimeOpts: Intl.DateTimeFormatOptions = {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit'
+                  };
                   return (
                     <tr
                       key={act.id}

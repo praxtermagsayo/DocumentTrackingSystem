@@ -1,4 +1,4 @@
-export type DocumentStatus = 'draft' | 'under-review' | 'approved' | 'rejected' | 'archived';
+export type DocumentStatus = 'draft' | 'under-review' | 'approved' | 'rejected' | 'archived' | 'sent';
 
 export interface Document {
   id: string;
@@ -12,6 +12,9 @@ export interface Document {
   fileType: string;
   fileSize: string;
   trackingId: string;
+  recipients?: string[];
+  filePath?: string;
+  originalFilename?: string;
   ownerName: string;
   ownerAvatar?: string;
   /** Owner's user id (for permission checks). */
@@ -25,6 +28,16 @@ export interface EventCategory {
   id: string;
   name: string;
   status: EventCategoryStatus;
+  createdBy: string;
+  createdAt: string;
+}
+
+export type DocumentCategoryStatus = 'active' | 'inactive';
+
+export interface DocumentCategory {
+  id: string;
+  name: string;
+  status: DocumentCategoryStatus;
   createdBy: string;
   createdAt: string;
 }

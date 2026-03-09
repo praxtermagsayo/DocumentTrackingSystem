@@ -51,19 +51,27 @@ export function useDocumentDetail(
     async (doc: Document) => {
       setIsDeleting(true);
       try {
-        await deleteDocument(doc.id);
+        // Delete ALL files in the same upload batch (same trackingId)
+        const batchDocs = documents.filter((d) => d.trackingId === doc.trackingId);
+        for (const batchDoc of batchDocs) {
+          await deleteDocument(batchDoc.id);
+        }
       } finally {
         setIsDeleting(false);
       }
     },
-    [deleteDocument]
+    [deleteDocument, documents]
   );
 
   const handleUpdateStatus = useCallback(
     async (doc: Document) => {
       setIsUpdatingStatus(true);
       try {
-        await updateDocumentStatus(doc.id, selectedStatus, statusComment);
+        // Update status for ALL files in the same upload batch (same trackingId)
+        const batchDocs = documents.filter((d) => d.trackingId === doc.trackingId);
+        for (const batchDoc of batchDocs) {
+          await updateDocumentStatus(batchDoc.id, selectedStatus, statusComment);
+        }
         setShowStatusModal(false);
         setStatusComment('');
         loadHistory();
@@ -71,7 +79,7 @@ export function useDocumentDetail(
         setIsUpdatingStatus(false);
       }
     },
-    [selectedStatus, statusComment, updateDocumentStatus, loadHistory]
+    [selectedStatus, statusComment, updateDocumentStatus, loadHistory, documents]
   );
 
   const handleAddComment = useCallback(

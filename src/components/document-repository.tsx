@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router';
 import { DocumentStatus } from '../types';
 import { Search, FileText, X } from 'lucide-react';
@@ -62,6 +62,24 @@ export function DocumentRepository() {
     if (statusTab === 'rejected') return doc.status === 'rejected';
     return true;
   });
+
+  const groupedDocuments = useMemo(() => {
+    const groups: Record<string, any> = {};
+    filteredDocuments.forEach(doc => {
+      const tid = doc.trackingId;
+      if (!groups[tid]) {
+        groups[tid] = { ...doc, files: [doc] };
+      } else {
+        groups[tid].files.push(doc);
+        if (new Date(doc.updatedAt) > new Date(groups[tid].updatedAt)) {
+          groups[tid].updatedAt = doc.updatedAt;
+        }
+      }
+    });
+    return Object.values(groups).sort((a: any, b: any) =>
+      new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
+  }, [filteredDocuments]);
 
   const cardStyle = { backgroundColor: 'var(--card)', borderColor: 'var(--border)' };
   const textStyle = { color: 'var(--foreground)' };
@@ -156,9 +174,8 @@ export function DocumentRepository() {
                 <button
                   key={key}
                   onClick={() => setTab(key)}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-                    viewTab === key ? 'bg-blue-600 text-white' : 'hover:opacity-90'
-                  }`}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-elastic active-elastic-tap ${viewTab === key ? 'bg-blue-600 text-white shadow-md' : 'hover:opacity-90'
+                    }`}
                   style={viewTab === key ? undefined : { color: 'var(--foreground)' }}
                 >
                   {label}
@@ -171,9 +188,8 @@ export function DocumentRepository() {
                   <button
                     key={tab}
                     onClick={() => setStatusTab(tab)}
-                    className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
-                      statusTab === tab ? 'bg-blue-600/20 text-blue-700 dark:text-blue-400' : 'hover:opacity-90'
-                    }`}
+                    className={`px-2.5 py-1 text-xs font-medium rounded-md transition-elastic active-elastic-tap ${statusTab === tab ? 'bg-blue-600/20 text-blue-700 dark:text-blue-400 shadow-sm' : 'hover:opacity-90'
+                      }`}
                     style={statusTab === tab ? undefined : mutedStyle}
                   >
                     {tab === 'all' ? 'All' : tab === 'signed' ? 'Signed' : tab === 'pending' ? 'Pending' : 'Rejected'}
@@ -203,7 +219,7 @@ export function DocumentRepository() {
             </div>
           </div>
           <p className="mt-2 text-sm" style={mutedStyle}>
-            Showing <span className="font-medium" style={textStyle}>{filteredDocuments.length}</span> of {baseDocs.length} documents
+            Showing <span className="font-medium" style={textStyle}>{groupedDocuments.length}</span> upload sessions
           </p>
         </div>
 
@@ -219,28 +235,38 @@ export function DocumentRepository() {
               </tr>
             </thead>
             <tbody className="divide-y" style={{ borderColor: 'var(--border)' }}>
-              {filteredDocuments.map((doc) => (
-                <tr key={doc.id} className="transition-app hover:opacity-90" style={{ backgroundColor: 'var(--card)' }}>
+              {groupedDocuments.map((doc: any) => (
+                <tr key={doc.trackingId} className="transition-elastic hover:opacity-95 animate-elastic-slide" style={{ backgroundColor: 'var(--card)' }}>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-lg ${getFileIconBg(doc.fileType)}`}>
-                        {getFileIcon(doc.fileType)}
+                      <div className={`p-2 rounded-lg ${doc.files.length > 1 ? 'bg-blue-600/10' : getFileIconBg(doc.fileType)} relative`}>
+                        {doc.files.length > 1 ? (
+                          <div className="relative">
+                            <FileText className="size-5 text-blue-600" />
+                            <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] size-4 rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900">
+                              {doc.files.length}
+                            </span>
+                          </div>
+                        ) : getFileIcon(doc.fileType)}
                       </div>
                       <div className="min-w-0 text-left">
                         <Link
-                          to={`/documents/${doc.id}`}
+                          to={doc.status === 'draft' ? `/upload?edit=${doc.id}` : `/documents/${doc.id}`}
                           state={{ from: location.pathname }}
                           className="text-sm font-medium hover:text-blue-600 dark:hover:text-blue-400 transition-colors block truncate"
                           style={textStyle}
                           title={doc.title}
                         >
                           {doc.title}
+                          {doc.files.length > 1 && <span className="ml-2 text-xs font-normal opacity-60">({doc.files.length} files)</span>}
                         </Link>
                         <div className="mt-1 flex flex-wrap items-center gap-1.5 justify-start">
                           <DocumentSourceBadge document={doc} currentUserId={currentUserId} />
                         </div>
                         <p className="text-xs m-0 mt-0.5 text-left" style={mutedStyle}>
-                          {doc.fileType} • {doc.fileSize}
+                          {doc.files.length > 1
+                            ? `${doc.files.map((f: any) => f.fileType).join(', ')}`
+                            : `${doc.fileType} • ${doc.fileSize}`}
                         </p>
                       </div>
                     </div>
@@ -251,7 +277,7 @@ export function DocumentRepository() {
                     </span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-sm" style={mutedStyle}>{doc.trackingId}</span>
+                    <span className="text-sm font-mono" style={mutedStyle}>{doc.trackingId}</span>
                   </td>
                   <td className="px-6 py-4">
                     <span className="text-sm" style={mutedStyle}>{formatDate(doc.updatedAt)}</span>
@@ -271,7 +297,7 @@ export function DocumentRepository() {
           </table>
         </div>
 
-        {filteredDocuments.length === 0 && (
+        {groupedDocuments.length === 0 && (
           <div className="text-center py-12">
             <FileText className="mx-auto size-12" style={mutedStyle} />
             <h3 className="mt-4 text-lg font-medium" style={textStyle}>No documents found</h3>

@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react';
+import { useState, useRef, type CSSProperties } from 'react';
 import { useSearchParams } from 'react-router';
 import { FileText } from 'lucide-react';
 import { Login } from './login';
@@ -13,16 +13,82 @@ function viewFromParam(param: string | null): AuthView {
 }
 
 const BLUE = '#2563eb';
-const DURATION = '0.8s'; // Slightly slower for more premium feel
-const EASING = 'cubic-bezier(0.65, 0, 0.35, 1)';
+
+// ── BACKUP: Previous smooth transition ──────────────────────────────
+// const DURATION = '0.8s';
+// const EASING = 'cubic-bezier(0.65, 0, 0.35, 1)';
+// overlay transition: `all ${DURATION} ${EASING}`
+// ─────────────────────────────────────────────────────────────────────
+
+// Elastic animation duration
+const ANIM_DURATION = '0.9s';
+
+// Duration/easing for parallax forms (kept smooth so forms don't jitter)
+const FORM_DURATION = '0.8s';
+const FORM_EASING = 'cubic-bezier(0.65, 0, 0.35, 1)';
+
+// CSS keyframes for elastic stretch & fling
+const elasticKeyframes = `
+@keyframes elasticSlideRight {
+  0% {
+    transform: translateX(0%);
+    border-radius: 2.5rem 10rem 10rem 2.5rem;
+  }
+  /* Stretch phase — panel widens toward target direction */
+  20% {
+    transform: translateX(5%) scaleX(1.25);
+    border-radius: 4rem 8rem 8rem 4rem;
+  }
+  /* Fling — snaps past target, compressed */
+  55% {
+    transform: translateX(102%) scaleX(0.95);
+    border-radius: 10rem 2.5rem 2.5rem 10rem;
+  }
+  /* Overshoot bounce back */
+  75% {
+    transform: translateX(98%) scaleX(1.03);
+    border-radius: 10rem 2.5rem 2.5rem 10rem;
+  }
+  /* Settle */
+  100% {
+    transform: translateX(100%) scaleX(1);
+    border-radius: 10rem 2.5rem 2.5rem 10rem;
+  }
+}
+
+@keyframes elasticSlideLeft {
+  0% {
+    transform: translateX(100%);
+    border-radius: 10rem 2.5rem 2.5rem 10rem;
+  }
+  /* Stretch phase — panel widens toward target direction */
+  20% {
+    transform: translateX(95%) scaleX(1.12);
+    border-radius: 8rem 4rem 4rem 8rem;
+  }
+  /* Fling — snaps past target, compressed */
+  55% {
+    transform: translateX(-2%) scaleX(0.95);
+    border-radius: 2.5rem 10rem 10rem 2.5rem;
+  }
+  /* Overshoot bounce back */
+  75% {
+    transform: translateX(2%) scaleX(1.03);
+    border-radius: 2.5rem 10rem 10rem 2.5rem;
+  }
+  /* Settle */
+  100% {
+    transform: translateX(0%) scaleX(1);
+    border-radius: 2.5rem 10rem 10rem 2.5rem;
+  }
+}
+`;
 
 /**
- * Modern Auth Layout with high-quality parallax sliding transition.
+ * Modern Auth Layout with elastic sliding transition.
  * 
- * Logic:
- * - Two static containers, each 50% width.
- * - Overlay slides on top (0% to 50% left).
- * - Forms inside containers have their own parallax translations.
+ * The blue overlay stretches like elastic, flings into place, and settles
+ * with a subtle wobble for a premium springy feel.
  */
 export function AuthLayout() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -32,12 +98,20 @@ export function AuthLayout() {
   const isRegister = currentView === 'register';
   const isForgot = currentView === 'forgot';
 
+  // Track animation direction
+  const [animDirection, setAnimDirection] = useState<'idle' | 'to-register' | 'to-login'>('idle');
+  const animKeyRef = useRef(0);
+
   const goTo = (view: AuthView) => {
     if (view === 'login') {
+      setAnimDirection('to-login');
       setSearchParams({});
     } else {
+      setAnimDirection('to-register');
       setSearchParams({ view });
     }
+    // Force re-trigger animation by bumping key
+    animKeyRef.current += 1;
   };
 
   // --- Styles ---
@@ -76,7 +150,7 @@ export function AuthLayout() {
     zIndex: 1,
     overflowY: 'auto',
     paddingTop: '1.5rem',
-    paddingBottom: '1.5rem', 
+    paddingBottom: '1.5rem',
     scrollbarWidth: 'none',
     msOverflowStyle: 'none',
   };
@@ -93,12 +167,22 @@ export function AuthLayout() {
     zIndex: 1,
     overflowY: 'auto',
     paddingTop: '1.5rem',
-    paddingBottom: '1.5rem', 
+    paddingBottom: '1.5rem',
     scrollbarWidth: 'none',
     msOverflowStyle: 'none',
   };
 
-  // Overlay panel
+  // Overlay panel — elastic animation
+  const getOverlayAnimation = (): string => {
+    if (animDirection === 'to-register') {
+      return `elasticSlideRight ${ANIM_DURATION} cubic-bezier(0.22, 1, 0.36, 1) forwards`;
+    }
+    if (animDirection === 'to-login') {
+      return `elasticSlideLeft ${ANIM_DURATION} cubic-bezier(0.22, 1, 0.36, 1) forwards`;
+    }
+    return 'none';
+  };
+
   const overlayStyle: CSSProperties = {
     position: 'absolute',
     left: 0,
@@ -106,8 +190,10 @@ export function AuthLayout() {
     width: '50%',
     height: '100%',
     zIndex: 100,
+    // Static position when idle (no animation yet)
     transform: `translateX(${isRegister ? '100%' : '0%'})`,
-    transition: `all ${DURATION} ${EASING}`,
+    // Apply animation when direction is set
+    animation: getOverlayAnimation(),
     background: `linear-gradient(135deg, ${BLUE} 0%, #1d4ed8 50%, #1e40af 100%)`,
     display: 'flex',
     flexDirection: 'column',
@@ -117,29 +203,28 @@ export function AuthLayout() {
     color: '#fff',
     overflow: 'hidden',
     borderRadius: isRegister
-      ? '10rem 2.5rem 2.5rem 10rem' // Rounded left side when overlay is on the right
-      : '2.5rem 10rem 10rem 2.5rem', // Rounded right side when overlay is on the left
+      ? '10rem 2.5rem 2.5rem 10rem'
+      : '2.5rem 10rem 10rem 2.5rem',
+    transformOrigin: 'center center',
   };
 
-  // Field Parallax Styles
-  // Register fields (left side) move right-to-left as overlay moves away
+  // Field Parallax Styles (kept smooth — not elastic)
   const registerParallax: CSSProperties = {
     width: '100%',
     maxWidth: '24rem',
     padding: '0 1.5rem',
-    transition: `all ${DURATION} ${EASING}`,
+    transition: `all ${FORM_DURATION} ${FORM_EASING}`,
     transform: isRegister ? 'translateX(0)' : 'translateX(-60px)',
     opacity: isRegister ? 1 : 0,
     pointerEvents: isRegister ? 'auto' : 'none',
     visibility: isRegister ? 'visible' : 'hidden',
   };
 
-  // Login fields (right side) move left-to-right as overlay moves away
   const loginParallax: CSSProperties = {
     width: '100%',
     maxWidth: '24rem',
     padding: '0 1.5rem',
-    transition: `all ${DURATION} ${EASING}`,
+    transition: `all ${FORM_DURATION} ${FORM_EASING}`,
     transform: isRegister ? 'translateX(60px)' : 'translateX(0)',
     opacity: isRegister ? 0 : 1,
     pointerEvents: isRegister ? 'none' : 'auto',
@@ -192,6 +277,9 @@ export function AuthLayout() {
 
   return (
     <div style={wrapperStyle}>
+      {/* Inject elastic keyframes */}
+      <style>{elasticKeyframes}</style>
+
       <div style={cardStyle}>
 
         {/* Left Side: Register Form (uncovered when overlay is on right) */}
@@ -208,8 +296,8 @@ export function AuthLayout() {
           </div>
         </div>
 
-        {/* Overlay Panel */}
-        <div style={overlayStyle}>
+        {/* Overlay Panel — elastic animation */}
+        <div key={animKeyRef.current} style={overlayStyle}>
           {overlayContent()}
         </div>
 

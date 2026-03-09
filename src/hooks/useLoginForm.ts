@@ -1,9 +1,10 @@
 import { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useLocation } from 'react-router';
 import type { AppContextType } from '../contexts/AppContext';
 
 export function useLoginForm(login: AppContextType['login'], isAuthenticated: boolean) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -21,7 +22,8 @@ export function useLoginForm(login: AppContextType['login'], isAuthenticated: bo
       setIsLoading(true);
       try {
         await login(email.trim(), password);
-        navigate('/', { replace: true });
+        const from = location.state?.from?.pathname || '/';
+        navigate(from, { replace: true });
       } catch (err: unknown) {
         // Play failure sound
         const audio = new Audio('/nope.mp3');

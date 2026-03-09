@@ -18,9 +18,11 @@ export interface DocumentRow {
   owner_name: string;
   created_at: string;
   updated_at: string;
+  recipients?: string[] | null;
   team_id?: string | null;
   assigned_to?: string | null;
   assigned_to_name?: string | null;
+  original_filename?: string | null;
 }
 
 function rowToDocument(row: DocumentRow): Document {
@@ -36,8 +38,11 @@ function rowToDocument(row: DocumentRow): Document {
     fileType: row.file_type,
     fileSize: row.file_size,
     trackingId: row.tracking_id,
+    recipients: row.recipients || [],
     ownerName: row.owner_name,
     ownerId: row.user_id,
+    filePath: row.file_path || undefined,
+    originalFilename: row.original_filename || undefined,
   };
 }
 
@@ -53,6 +58,14 @@ export async function fetchDocuments(userId: string): Promise<Document[]> {
   return documents;
 }
 
+export async function getFileUrl(filePath: string): Promise<string | null> {
+  const { data, error } = await supabase.storage
+    .from(BUCKET)
+    .createSignedUrl(filePath, 3600); // 1 hour expiry
+  if (error || !data?.signedUrl) return null;
+  return data.signedUrl;
+}
+
 function formatFileSizeDisplay(bytes: number): string {
   if (bytes < 1024) return bytes + ' Bytes';
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
@@ -66,18 +79,25 @@ export async function createDocument(params: {
   description: string;
   category: string;
   status: DocumentStatus;
+  recipients?: string[];
   file?: File;
+  trackingId?: string;
+  originalFilename?: string;
 }): Promise<Document> {
-  const { userId, ownerName, title, description, category, status, file } = params;
+  const { userId, ownerName, title, description, category, status, recipients, file, trackingId: providedTrackingId, originalFilename } = params;
 
   const year = new Date().getFullYear();
-  const { count } = await supabase
-    .from('documents')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', userId)
-    .gte('created_at', `${year}-01-01`);
-  const seq = (count ?? 0) + 1;
-  const trackingId = `${TRACKING_PREFIX}-${year}-${String(seq).padStart(3, '0')}`;
+  let trackingId = providedTrackingId;
+
+  if (!trackingId) {
+    const { count } = await supabase
+      .from('documents')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .gte('created_at', `${year}-01-01`);
+    const seq = (count ?? 0) + 1;
+    trackingId = `${TRACKING_PREFIX}-${year}-${String(seq).padStart(3, '0')}`;
+  }
 
   const docId = crypto.randomUUID();
   let file_path: string | null = null;
@@ -98,10 +118,12 @@ export async function createDocument(params: {
     category: category || 'Other',
     status,
     tracking_id: trackingId,
+    recipients: recipients || [],
     file_path,
     file_type,
     file_size,
     owner_name: ownerName,
+    original_filename: originalFilename || (file ? file.name : null),
   };
 
   const { data: row, error: insertError } = await supabase
@@ -146,7 +168,7 @@ export async function createDocument(params: {
         .eq('id', docId);
       throw new Error(
         `Document was saved but the file could not be uploaded. ${msg} ` +
-          'Check that the Storage bucket "documents" exists in Supabase and that RLS allows uploads.'
+        'Check that the Storage bucket "documents" exists in Supabase and that RLS allows uploads.'
       );
     }
 
@@ -174,6 +196,50 @@ export async function createDocument(params: {
   }
 
   return rowToDocument(row as DocumentRow);
+}
+
+export async function fetchDocumentsByTrackingId(trackingId: string): Promise<Document[]> {
+  const { data, error } = await supabase
+    .from('documents')
+    .select('*')
+    .eq('tracking_id', trackingId);
+
+  if (error) throw error;
+  return (data || []).map((row) => rowToDocument(row as DocumentRow));
+}
+
+export async function createDocuments(params: {
+  userId: string;
+  ownerName: string;
+  title: string;
+  description: string;
+  category: string;
+  status: DocumentStatus;
+  recipients?: string[];
+  files: File[];
+  trackingId?: string;
+}): Promise<Document[]> {
+  const { files, userId, trackingId: providedTrackingId, ...rest } = params;
+
+  // Generate ONE trackingId for the whole batch if not provided
+  let trackingId = providedTrackingId;
+  if (!trackingId) {
+    const year = new Date().getFullYear();
+    const { count } = await supabase
+      .from('documents')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .gte('created_at', `${year}-01-01`);
+    const seq = (count ?? 0) + 1;
+    trackingId = `${TRACKING_PREFIX}-${year}-${String(seq).padStart(3, '0')}`;
+  }
+
+  const results: Document[] = [];
+  for (const file of files) {
+    const doc = await createDocument({ ...rest, userId, file, trackingId, originalFilename: file.name });
+    results.push(doc);
+  }
+  return results;
 }
 
 export async function updateDocumentStatus(

@@ -5,11 +5,14 @@ import { supabase } from '../lib/supabase';
 import * as eventCategoryService from '../services/eventCategories';
 import type { EventCategory, EventCategoryStatus } from '../types';
 import { toast } from 'sonner';
+import { useApp } from '../contexts/AppContext';
 import { PageTransition } from './page-transition';
 import { Skeleton } from './ui/skeleton';
 
 export function EventCategories() {
   const navigate = useNavigate();
+  const { user } = useApp();
+  const isAdmin = user?.role === 'admin';
   const [categories, setCategories] = useState<EventCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState('');
@@ -117,50 +120,52 @@ export function EventCategories() {
         </p>
       </div>
 
-      <div className="rounded-lg shadow-sm border p-6" style={cardStyle}>
-        <h2 className="text-lg font-semibold mb-4 flex items-center gap-2" style={textStyle}>
-          <Plus className="size-5" />
-          Create a category
-        </h2>
-        <form onSubmit={handleCreate} className="space-y-4">
-          <div>
-            <label htmlFor="category-name" className="block text-sm font-medium mb-2" style={textStyle}>
-              Category name <span className="text-red-500">*</span>
-            </label>
-            <input
-              id="category-name"
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Meeting, Training, Workshop"
-              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              style={inputStyle}
-            />
-          </div>
-          <div>
-            <label htmlFor="category-status" className="block text-sm font-medium mb-2" style={textStyle}>
-              Status
-            </label>
-            <select
-              id="category-status"
-              value={status}
-              onChange={(e) => setStatus(e.target.value as EventCategoryStatus)}
-              className="w-full pl-4 pr-8 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
-              style={inputStyle}
+      {isAdmin && (
+        <div className="rounded-lg shadow-sm border p-6" style={cardStyle}>
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2" style={textStyle}>
+            <Plus className="size-5" />
+            Create a category
+          </h2>
+          <form onSubmit={handleCreate} className="space-y-4">
+            <div>
+              <label htmlFor="category-name" className="block text-sm font-medium mb-2" style={textStyle}>
+                Category name <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="category-name"
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Meeting, Training, Workshop"
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <label htmlFor="category-status" className="block text-sm font-medium mb-2" style={textStyle}>
+                Status
+              </label>
+              <select
+                id="category-status"
+                value={status}
+                onChange={(e) => setStatus(e.target.value as EventCategoryStatus)}
+                className="w-full pl-4 pr-8 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+                style={inputStyle}
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+            <button
+              type="submit"
+              disabled={isCreating || !name.trim()}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-          </div>
-          <button
-            type="submit"
-            disabled={isCreating || !name.trim()}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isCreating ? 'Creating...' : 'Create category'}
-          </button>
-        </form>
-      </div>
+              {isCreating ? 'Creating...' : 'Create category'}
+            </button>
+          </form>
+        </div>
+      )}
 
       <div className="rounded-lg shadow-sm border p-6" style={cardStyle}>
         <h2 className="text-lg font-semibold mb-4" style={textStyle}>List of Categories</h2>
@@ -220,30 +225,33 @@ export function EventCategories() {
                     <div className="flex-1">
                       <span className="font-medium" style={textStyle}>{cat.name}</span>
                       <span
-                        className={`ml-2 px-2 py-0.5 rounded text-xs font-medium ${
-                          cat.status === 'active' ? 'bg-green-500/20 text-green-700 dark:text-green-400' : 'bg-gray-500/20 text-gray-600 dark:text-gray-400'
-                        }`}
+                        className={`ml-2 px-2 py-0.5 rounded text-xs font-medium ${cat.status === 'active' ? 'bg-green-500/20 text-green-700 dark:text-green-400' : 'bg-gray-500/20 text-gray-600 dark:text-gray-400'
+                          }`}
                       >
                         {cat.status}
                       </span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => startEdit(cat)}
-                      className="p-2 rounded-lg hover:opacity-80"
-                      style={mutedStyle}
-                      title="Edit"
-                    >
-                      <Pencil className="size-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(cat.id)}
-                      className="p-2 rounded-lg text-red-600 dark:text-red-400 hover:opacity-80"
-                      title="Delete"
-                    >
-                      <Trash2 className="size-4" />
-                    </button>
+                    {isAdmin && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => startEdit(cat)}
+                          className="p-2 rounded-lg hover:opacity-80"
+                          style={mutedStyle}
+                          title="Edit"
+                        >
+                          <Pencil className="size-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(cat.id)}
+                          className="p-2 rounded-lg text-red-600 dark:text-red-400 hover:opacity-80"
+                          title="Delete"
+                        >
+                          <Trash2 className="size-4" />
+                        </button>
+                      </>
+                    )}
                   </>
                 )}
               </li>

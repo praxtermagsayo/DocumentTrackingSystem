@@ -72,22 +72,30 @@ export function Dashboard() {
   })();
 
   const ageingData = [
-    { name: 'Overdue', value: documents.filter((d) => {
-      const days = Math.floor((Date.now() - new Date(d.updatedAt).getTime()) / (24 * 60 * 60 * 1000));
-      return days < 0;
-    }).length, fill: '#f97316' },
-    { name: '0-7 days', value: documents.filter((d) => {
-      const days = Math.floor((Date.now() - new Date(d.updatedAt).getTime()) / (24 * 60 * 60 * 1000));
-      return days >= 0 && days <= 7;
-    }).length, fill: '#8b5cf6' },
-    { name: '8-14 days', value: documents.filter((d) => {
-      const days = Math.floor((Date.now() - new Date(d.updatedAt).getTime()) / (24 * 60 * 60 * 1000));
-      return days > 7 && days <= 14;
-    }).length, fill: '#3b82f6' },
-    { name: '15+ days', value: documents.filter((d) => {
-      const days = Math.floor((Date.now() - new Date(d.updatedAt).getTime()) / (24 * 60 * 60 * 1000));
-      return days > 14;
-    }).length, fill: '#10b981' },
+    {
+      name: 'Overdue', value: documents.filter((d) => {
+        const days = Math.floor((Date.now() - new Date(d.updatedAt).getTime()) / (24 * 60 * 60 * 1000));
+        return days < 0;
+      }).length, fill: '#f97316'
+    },
+    {
+      name: '0-7 days', value: documents.filter((d) => {
+        const days = Math.floor((Date.now() - new Date(d.updatedAt).getTime()) / (24 * 60 * 60 * 1000));
+        return days >= 0 && days <= 7;
+      }).length, fill: '#8b5cf6'
+    },
+    {
+      name: '8-14 days', value: documents.filter((d) => {
+        const days = Math.floor((Date.now() - new Date(d.updatedAt).getTime()) / (24 * 60 * 60 * 1000));
+        return days > 7 && days <= 14;
+      }).length, fill: '#3b82f6'
+    },
+    {
+      name: '15+ days', value: documents.filter((d) => {
+        const days = Math.floor((Date.now() - new Date(d.updatedAt).getTime()) / (24 * 60 * 60 * 1000));
+        return days > 14;
+      }).length, fill: '#10b981'
+    },
   ];
 
   return (
@@ -99,23 +107,23 @@ export function Dashboard() {
 
       {/* Status Cards - 5 in one row (flex ensures layout regardless of Tailwind) */}
       <div style={{ display: 'flex', flexDirection: 'row', gap: '1rem', flexWrap: 'nowrap' }}>
-        <div className="rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow" style={{ backgroundColor: '#f97316', color: '#fff', flex: 1, minWidth: 0 }}>
+        <div className="rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow animate-elastic-pop" style={{ backgroundColor: '#f97316', color: '#fff', flex: 1, minWidth: 0, animationDelay: '0s' }}>
           <div className="text-sm font-medium mb-2">Draft</div>
           <div className="text-4xl font-bold">{stats.draft}</div>
         </div>
-        <div className="rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow" style={{ backgroundColor: '#3b82f6', color: '#fff', flex: 1, minWidth: 0 }}>
+        <div className="rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow animate-elastic-pop" style={{ backgroundColor: '#3b82f6', color: '#fff', flex: 1, minWidth: 0, animationDelay: '0.05s' }}>
           <div className="text-sm font-medium mb-2">For Review</div>
           <div className="text-4xl font-bold">{stats.underReview}</div>
         </div>
-        <div className="rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow" style={{ backgroundColor: '#22c55e', color: '#fff', flex: 1, minWidth: 0 }}>
+        <div className="rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow animate-elastic-pop" style={{ backgroundColor: '#22c55e', color: '#fff', flex: 1, minWidth: 0, animationDelay: '0.1s' }}>
           <div className="text-sm font-medium mb-2">Approval</div>
           <div className="text-4xl font-bold">{stats.approved}</div>
         </div>
-        <div className="rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow" style={{ backgroundColor: '#9333ea', color: '#fff', flex: 1, minWidth: 0 }}>
+        <div className="rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow animate-elastic-pop" style={{ backgroundColor: '#9333ea', color: '#fff', flex: 1, minWidth: 0, animationDelay: '0.15s' }}>
           <div className="text-sm font-medium mb-2">Rejected</div>
           <div className="text-4xl font-bold">{stats.rejected}</div>
         </div>
-        <div className="rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow" style={{ backgroundColor: '#94a3b8', color: '#fff', flex: 1, minWidth: 0 }}>
+        <div className="rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow animate-elastic-pop" style={{ backgroundColor: '#94a3b8', color: '#fff', flex: 1, minWidth: 0, animationDelay: '0.2s' }}>
           <div className="text-sm font-medium mb-2">Archived</div>
           <div className="text-4xl font-bold">{stats.archived}</div>
         </div>

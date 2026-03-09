@@ -24,7 +24,8 @@ export function Login({ embedded = false }: { embedded?: boolean }) {
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/', { replace: true });
+      const from = location.state?.from?.pathname || '/';
+      navigate(from, { replace: true });
     }
   }, [isAuthenticated, navigate]);
 

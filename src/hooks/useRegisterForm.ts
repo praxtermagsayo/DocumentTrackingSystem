@@ -9,7 +9,7 @@ export interface RegisterFormData {
   password: string;
   confirmPassword: string;
   phone: string;
-  organization: string;
+  role: string;
 }
 
 const initialFormData: RegisterFormData = {
@@ -19,7 +19,7 @@ const initialFormData: RegisterFormData = {
   password: '',
   confirmPassword: '',
   phone: '',
-  organization: '',
+  role: 'user',
 };
 
 export function useRegisterForm(isAuthenticated: boolean) {
@@ -89,8 +89,8 @@ export function useRegisterForm(isAuthenticated: boolean) {
           options: {
             data: {
               full_name: fullName,
-              organization: formData.organization || undefined,
               phone: formData.phone || undefined,
+              role: formData.role,
             },
           },
         });

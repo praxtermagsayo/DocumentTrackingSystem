@@ -28,6 +28,7 @@ export function useRegisterForm(isAuthenticated: boolean) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formData, setFormData] = useState<RegisterFormData>(initialFormData);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
@@ -79,9 +80,23 @@ export function useRegisterForm(isAuthenticated: boolean) {
     async (e: React.FormEvent) => {
       e.preventDefault();
       setError('');
+      setSuccessMessage('');
       if (!validateForm()) return;
       setIsLoading(true);
       try {
+        // 1. Check if email already exists in profiles
+        const { data: existingProfile, error: profileError } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('email', formData.email.trim())
+          .maybeSingle();
+
+        if (existingProfile) {
+          setError('An account with this email address already exists. Please sign in instead.');
+          setIsLoading(false);
+          return;
+        }
+
         const fullName = `${formData.firstName.trim()} ${formData.lastName.trim()}`;
         const { data, error: signUpError } = await supabase.auth.signUp({
           email: formData.email.trim(),
@@ -98,10 +113,8 @@ export function useRegisterForm(isAuthenticated: boolean) {
         if (data.session) {
           navigate('/', { replace: true });
         } else {
-          navigate('/login', {
-            replace: true,
-            state: { message: 'Account created. Please check your email to confirm your account.' },
-          });
+          setSuccessMessage('Account created successfully! Please check your email to confirm your account before logging in.');
+          setFormData(initialFormData); // Clear the form
         }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Registration failed. Please try again.';
@@ -117,6 +130,7 @@ export function useRegisterForm(isAuthenticated: boolean) {
     formData,
     handleChange,
     error,
+    successMessage,
     isLoading,
     showPassword,
     setShowPassword,

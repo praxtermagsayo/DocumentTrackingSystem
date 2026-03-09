@@ -68,8 +68,9 @@ Deno.serve(async (req) => {
     });
     const { data: { user }, error: userError } = await authClient.auth.getUser(token);
     if (userError || !user) {
+      console.error('Edge Function getUser error:', userError);
       return Response.json(
-        { error: 'Invalid or expired token' },
+        { error: `Invalid or expired token: ${userError?.message || 'No user found'}` },
         { status: 401, headers: corsHeaders }
       );
     }
@@ -97,6 +98,15 @@ Deno.serve(async (req) => {
       if (removeError) {
         console.warn('Storage remove error for chunk:', removeError);
       }
+    }
+
+    // Force clear user metadata BEFORE deleting. 
+    // This prevents retained OAuth identity linkages from reviving the old role/phone if they sign in again.
+    const { error: updateError } = await adminClient.auth.admin.updateUserById(userId, {
+      user_metadata: { role: null, phone: null }
+    });
+    if (updateError) {
+      console.warn('Warning: Could not clear user metadata prior to delete:', updateError);
     }
 
     const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId);

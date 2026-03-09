@@ -46,11 +46,11 @@ function rowToDocument(row: DocumentRow): Document {
   };
 }
 
-export async function fetchDocuments(userId: string): Promise<Document[]> {
+export async function fetchDocuments(userId: string, userEmail: string): Promise<Document[]> {
   const { data, error } = await supabase
     .from('documents')
     .select('*')
-    .eq('user_id', userId)
+    .or(`user_id.eq.${userId},recipients.cs.{${userEmail}}`)
     .order('updated_at', { ascending: false });
 
   if (error) throw error;

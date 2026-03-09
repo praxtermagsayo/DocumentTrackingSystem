@@ -19,11 +19,10 @@ function rowToCategory(row: DocumentCategoryRow): DocumentCategory {
     };
 }
 
-export async function fetchDocumentCategories(userId: string): Promise<DocumentCategory[]> {
+export async function fetchDocumentCategories(): Promise<DocumentCategory[]> {
     const { data, error } = await supabase
         .from('document_categories')
         .select('*')
-        .eq('created_by', userId)
         .order('name');
 
     if (error) throw error;

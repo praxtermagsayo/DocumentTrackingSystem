@@ -19,11 +19,10 @@ function rowToCategory(row: EventCategoryRow): EventCategory {
   };
 }
 
-export async function fetchEventCategories(userId: string): Promise<EventCategory[]> {
+export async function fetchEventCategories(): Promise<EventCategory[]> {
   const { data, error } = await supabase
     .from('event_categories')
     .select('*')
-    .eq('created_by', userId)
     .order('name');
 
   if (error) throw error;

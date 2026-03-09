@@ -124,9 +124,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const refreshDocuments = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user?.id) return;
+    if (!session?.user?.id || !session?.user?.email) return;
     try {
-      const list = await documentService.fetchDocuments(session.user.id);
+      const list = await documentService.fetchDocuments(session.user.id, session.user.email);
       setDocuments(list);
     } catch {
       setDocuments([]);

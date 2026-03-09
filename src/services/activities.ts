@@ -30,11 +30,10 @@ function rowToActivity(row: ActivityWithCategory): Activity {
   };
 }
 
-export async function fetchActivities(userId: string): Promise<Activity[]> {
+export async function fetchActivities(): Promise<Activity[]> {
   const { data, error } = await supabase
     .from('activities')
-    .select('*')
-    .eq('user_id', userId)
+    .select('*, event_categories(name)')
     .order('event_start', { ascending: false });
 
   if (error) throw error;

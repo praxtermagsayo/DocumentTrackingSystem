@@ -74,16 +74,26 @@ export function Settings() {
   };
 
   const handleDeleteAccount = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user?.id) {
-      toast.error('Not signed in');
+    const { data: { session }, error: refreshError } = await supabase.auth.refreshSession();
+    const token = session?.access_token;
+
+    if (!token || !session?.user?.id) {
+      toast.error(refreshError?.message || 'Session expired. Please sign in again and retry.');
       return;
     }
+
     setIsDeleting(true);
     setShowDeleteConfirm(false);
     try {
-      await userDataService.deleteAllUserData(session.user.id);
-      await userDataService.deleteAuthUser();
+      // 1. Pre-fetch token to avoid RLS/refresh issues after profile is deleted
+      const userId = session.user.id;
+
+      // 2. Delete database data
+      await userDataService.deleteAllUserData(userId);
+
+      // 3. Delete auth user via Edge Function using the captured token
+      await userDataService.deleteAuthUser(token);
+
       logout();
       navigate('/login', { replace: true });
       toast.success('Account and all data have been deleted');
@@ -399,7 +409,7 @@ export function Settings() {
                     type="text"
                     value={deleteConfirm}
                     onChange={(e) => setDeleteConfirm(e.target.value)}
-                    placeholder="DELETE"
+                    placeholder="DELETE MY ACCOUNT"
                   />
                 </div>
               </AlertDialogDescription>

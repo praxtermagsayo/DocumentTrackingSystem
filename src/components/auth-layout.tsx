@@ -145,8 +145,7 @@ export function AuthLayout() {
     width: '50%',
     height: '100%',
     display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: 'column',
     zIndex: 1,
     overflowY: 'auto',
     paddingTop: '1.5rem',
@@ -162,8 +161,7 @@ export function AuthLayout() {
     width: '50%',
     height: '100%',
     display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: 'column',
     zIndex: 1,
     overflowY: 'auto',
     paddingTop: '1.5rem',
@@ -212,7 +210,8 @@ export function AuthLayout() {
   const registerParallax: CSSProperties = {
     width: '100%',
     maxWidth: '24rem',
-    padding: '0 1.5rem',
+    margin: 'auto', // Center vertically and horizontally inside the flex-column container safely
+    padding: '2rem 1.5rem',
     transition: `all ${FORM_DURATION} ${FORM_EASING}`,
     transform: isRegister ? 'translateX(0)' : 'translateX(-60px)',
     opacity: isRegister ? 1 : 0,
@@ -223,7 +222,8 @@ export function AuthLayout() {
   const loginParallax: CSSProperties = {
     width: '100%',
     maxWidth: '24rem',
-    padding: '0 1.5rem',
+    margin: 'auto', // Safely center vertically without top-clipping
+    padding: '2rem 1.5rem',
     transition: `all ${FORM_DURATION} ${FORM_EASING}`,
     transform: isRegister ? 'translateX(60px)' : 'translateX(0)',
     opacity: isRegister ? 0 : 1,

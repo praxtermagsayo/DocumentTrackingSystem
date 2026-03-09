@@ -12,6 +12,7 @@ export function Register({ embedded = false }: { embedded?: boolean }) {
     formData,
     handleChange,
     error,
+    successMessage,
     isLoading,
     showPassword,
     setShowPassword,
@@ -35,8 +36,7 @@ export function Register({ embedded = false }: { embedded?: boolean }) {
   };
   const pageBg = { backgroundColor: 'var(--background, #f8fafc)' };
 
-  // When embedded in the overlay layout, use 2-column grid for name and phone/org to save vertical space
-  const gridClass = 'grid grid-cols-2 gap-2';
+  // Layout spacing
   const inputPy = 'py-2';
   const labelMb = 'mb-1';
 
@@ -47,6 +47,12 @@ export function Register({ embedded = false }: { embedded?: boolean }) {
       {error && (
         <div className="mb-6 p-4 rounded-lg bg-red-500/20 border border-red-500/40">
           <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
+        </div>
+      )}
+
+      {successMessage && (
+        <div className="mb-6 p-4 rounded-lg bg-green-500/20 border border-green-500/40">
+          <p className="text-sm text-green-800 dark:text-green-300 font-medium">{successMessage}</p>
         </div>
       )}
 
@@ -95,8 +101,8 @@ export function Register({ embedded = false }: { embedded?: boolean }) {
 
       <form onSubmit={handleSubmit} className="space-y-2">
         {/* Name Fields */}
-        <div className={gridClass}>
-          <div>
+        <div className="flex gap-3">
+          <div className="flex-1">
             <label htmlFor="firstName" className={`block text-sm font-medium ${labelMb}`} style={textStyle}>
               First Name <span className="text-red-500">*</span>
             </label>
@@ -116,7 +122,7 @@ export function Register({ embedded = false }: { embedded?: boolean }) {
             </div>
           </div>
 
-          <div>
+          <div className="flex-1">
             <label htmlFor="lastName" className={`block text-sm font-medium ${labelMb}`} style={textStyle}>
               Last Name <span className="text-red-500">*</span>
             </label>
@@ -159,8 +165,8 @@ export function Register({ embedded = false }: { embedded?: boolean }) {
         </div>
 
         {/* Password Fields */}
-        <div className={gridClass}>
-          <div>
+        <div className="flex gap-3">
+          <div className="flex-1">
             <label htmlFor="password" className={`block text-sm font-medium ${labelMb}`} style={textStyle}>
               Password <span className="text-red-500">*</span>
             </label>
@@ -188,7 +194,7 @@ export function Register({ embedded = false }: { embedded?: boolean }) {
             </div>
           </div>
 
-          <div className='mb-2'>
+          <div className="flex-1">
             <label htmlFor="confirmPassword" className={`block text-sm font-medium ${labelMb}`} style={textStyle}>
               Confirm Password <span className="text-red-500">*</span>
             </label>
@@ -218,8 +224,8 @@ export function Register({ embedded = false }: { embedded?: boolean }) {
         </div>
 
         {/* Phone and Role */}
-        <div className={gridClass}>
-          <div className='mb-2'>
+        <div className="flex gap-3">
+          <div className="flex-1">
             <label htmlFor="phone" className={`block text-sm font-medium ${labelMb}`} style={textStyle}>
               Phone Number
             </label>
@@ -238,7 +244,7 @@ export function Register({ embedded = false }: { embedded?: boolean }) {
             </div>
           </div>
 
-          <div className='mb-2'>
+          <div className="flex-1">
             <label htmlFor="role" className={`block text-sm font-medium ${labelMb}`} style={textStyle}>
               Role <span className="text-red-500">*</span>
             </label>

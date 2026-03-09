@@ -164,19 +164,12 @@ export function Dashboard() {
           <RefreshCw className="size-4" />
         </button>
         <Link
-          to="/event-categories"
+          to="/document-categories"
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
         >
           <Plus className="size-4" />
           Create Category
         </Link>
-        <button
-          type="button"
-          onClick={() => setSearchQuery(searchTerm)}
-          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-        >
-          Search
-        </button>
       </div>
 
       {/* Main Content Grid - exact copy from reference */}

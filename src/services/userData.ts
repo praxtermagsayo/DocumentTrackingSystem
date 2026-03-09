@@ -131,16 +131,10 @@ export async function deleteAllUserData(userId: string): Promise<void> {
 }
 
 /**
- * Delete the auth user via Edge Function. Call this AFTER deleteAllUserData.
+ * Delete the auth user via Edge Function. Call this AFTER deleteAllUserData, but pass the token fetched BEFORE deleteAllUserData.
  * Uses raw fetch to avoid Supabase client invoke issues that can cause "Failed to fetch".
  */
-export async function deleteAuthUser(): Promise<void> {
-  const { data: { session }, error: refreshError } = await supabase.auth.refreshSession();
-  const token = session?.access_token;
-  if (!token) {
-    const msg = refreshError?.message ?? 'Session expired. Please sign in again and retry.';
-    throw new Error(msg);
-  }
+export async function deleteAuthUser(token: string): Promise<void> {
 
   const baseUrl = import.meta.env.VITE_SUPABASE_URL;
   const apikey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;

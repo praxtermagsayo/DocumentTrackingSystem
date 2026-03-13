@@ -214,7 +214,7 @@ export function ScheduleReport() {
                                                     <div
                                                         key={act.id}
                                                         className={`event-card animate-wave ${isOngoing ? 'is-ongoing' : ''} ${isPast ? 'is-past' : ''}`}
-                                                        style={{ gridColumn: `${pos.colStart} / span ${pos.colSpan}`, animationDelay: `${pos.colStart * 0.2}s` }}
+                                                        style={{ gridColumn: `${pos.colStart} / span ${pos.colSpan}`, animationDelay: `${pos.colStart * 0.}s` }}
                                                     >
                                                         <div className="flex flex-col h-full">
                                                             <div className="category-label bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 mb-3">
@@ -231,18 +231,8 @@ export function ScheduleReport() {
                                                                     {showDays && <span className="text-blue-500 font-bold mr-1">{getDayLabel(actEnd)}</span>}
                                                                     {formatT(actEnd)}
                                                                 </div>
-                                                                {isOngoing && (
-                                                                    <div className="ml-4 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 text-[9px] font-black uppercase tracking-tighter">
-                                                                        <span className="relative flex h-1.5 w-1.5">
-                                                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                                                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500"></span>
-                                                                        </span>
-                                                                        Ongoing
-                                                                    </div>
-                                                                )}
                                                             </div>
                                                         </div>
-                                                        {showDays && <div className="multi-day-glow"><div className="multi-day-dot"></div></div>}
                                                     </div>
                                                 );
                                             })}

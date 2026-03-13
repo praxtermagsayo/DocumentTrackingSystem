@@ -123,7 +123,7 @@
   align-items: center; /* Center horizontally */
   text-align: center; /* Center text */
   width: 98%; 
-  margin: 0.5rem auto; /* Vertical Gap */
+  margin: 0.25rem auto; /* Vertical Gap */
   overflow: hidden;
 }
 
@@ -149,15 +149,15 @@
   padding: 0.4rem 0.8rem;
   border-radius: 999px;
   width: fit-content;
-  margin: 0 auto 0.75rem auto; /* Force Center */
+  margin: 0 auto 0.25rem auto; /* Force Center */
   box-shadow: 0 2px 8px rgba(0,0,0,0.08); /* Boosted shadow */
 }
 
 .event-card .title {
-  font-size: 1.35rem; /* Even larger for impact */
+  font-size: 1.25rem; /* Even larger for impact */
   font-weight: 900;
   line-height: 1;
-  margin: 0.5rem 0 1rem 0;
+  margin: 0.1rem 0 0.5rem 0;
   color: #1d4ed8; /* Saturated Blue */
   letter-spacing: -0.02em;
 }
@@ -191,12 +191,12 @@
 
 /* Visual States */
 .event-card.is-ongoing {
-  border-left: 4px solid var(--schedule-accent-blue);
-  background: linear-gradient(to right, rgba(59, 130, 246, 0.05), transparent);
+  border: 2px solid var(--schedule-accent-blue);
+  background: linear-gradient(to right, rgba(59, 130, 246, 0.05), 0%);
 }
 
 .dark .event-card.is-ongoing {
-  background: linear-gradient(to right, rgba(59, 130, 246, 0.1), transparent);
+  background: linear-gradient(to right, rgba(59, 130, 246, 0.1), 0%);
 }
 
 .event-card.is-past {
@@ -225,7 +225,7 @@
 }
 
 .animate-wave {
-  animation: premium-float 6s infinite ease-in-out;
+  animation: premium-float 8s infinite ease-in-out;
 }
 
 /* Multi-day Indicator Glow */

@@ -11,7 +11,7 @@ import {
   Save,
   Loader2,
 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '../lib/toast';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../contexts/AppContext';
 import * as userDataService from '../services/userData';
@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Input } from './ui/input';
 import {
   AlertDialog,
+  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -416,27 +417,25 @@ export function Settings() {
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-              <button
-                type="button"
-                disabled={deleteConfirm !== 'DELETE MY ACCOUNT'}
-                onClick={(e) => {
+              <AlertDialogAction
+                variant="destructive"
+                disabled={deleteConfirm !== 'DELETE MY ACCOUNT' || isDeleting}
+                onClick={(e: React.MouseEvent) => {
                   e.preventDefault();
                   handleDeleteAccount();
                 }}
-                className="inline-flex items-center justify-center rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ color: 'var(--white)' }}
+                className="!text-white border-red-600"
+                style={{ backgroundColor: '#d4183d', color: '#fff' }}
               >
                 {isDeleting ? (
                   <>
-                    <Loader2 className="size-4 animate-spin" style={mutedStyle} />
+                    <Loader2 className="size-4 animate-spin mr-2" />
                     Deleting...
                   </>
                 ) : (
-                  <>
-                    Delete account
-                  </>
+                  'Delete account'
                 )}
-              </button>
+              </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

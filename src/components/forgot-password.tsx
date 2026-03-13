@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { FileText, Mail } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { toast } from 'sonner';
+import { toast } from '../lib/toast';
 
 export function ForgotPassword({ embedded = false }: { embedded?: boolean }) {
   const [email, setEmail] = useState('');

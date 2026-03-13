@@ -1,26 +1,33 @@
 import { useParams, useNavigate, useLocation } from 'react-router';
-import { DocumentStatus } from '../types';
+import { DocumentStatus, type DocumentAcknowledgement } from '../types';
 import {
   ArrowLeft,
   FileText,
   Calendar,
   User,
   Tag,
-  FileType,
   HardDrive,
   Clock,
   Download,
   Trash2,
   ChevronLeft,
   ChevronRight,
-  Share2,
+  Forward,
   FileDown,
   MessageSquare,
   Loader2,
   Paperclip,
   ExternalLink,
+  CheckCircle2,
+  Plus,
+  X,
+  Search,
+  Users,
+  Mail,
+  ChevronDown,
+  History,
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import {
@@ -42,19 +49,25 @@ import {
 } from './ui/select';
 import { useDocumentDetail } from '../hooks/useDocumentDetail';
 import { formatDate, getStatusColor, getStatusLabel } from '../lib/format';
-import { getFileUrl } from '../services/documents';
-import { toast } from 'sonner';
+import {
+  getFileUrl,
+  fetchAcknowledgements,
+  acknowledgeDocument,
+  updateDocumentRecipients,
+  recordDocumentView,
+} from '../services/documents';
+import * as notificationService from '../services/notifications';
+import { FullScreenLoader } from './ui/full-screen-loader';
+import { UserAvatar } from './ui/UserAvatar';
+import { toast } from '../lib/toast';
 
 export function DocumentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { updateDocumentStatus, deleteDocument, addComment, documents, currentUserId } = useApp();
+  const { updateDocumentStatus, deleteDocument, addComment, documents, currentUserId, refreshDocuments } = useApp();
   const document = documents.find((d) => d.id === id);
-  // Find all files in the same upload batch
-  const batchFiles = document
-    ? documents.filter((d) => d.trackingId === document.trackingId)
-    : [];
+  const files = document?.files || [];
 
   const handleOpenFile = async (filePath?: string) => {
     if (!filePath) {
@@ -71,6 +84,7 @@ export function DocumentDetail() {
 
   const {
     history,
+    loadHistory,
     previousDoc,
     nextDoc,
     showStatusModal,
@@ -87,19 +101,160 @@ export function DocumentDetail() {
     setComment,
     shareEmails,
     setShareEmails,
-    sharePermission,
-    setSharePermission,
     handleDelete,
     handleUpdateStatus,
     handleAddComment,
+    handleRoutingAction,
+    handleForward,
     isUpdatingStatus,
     isAddingComment,
     isDeleting,
+    isForwarding,
+    routingSteps,
+    isProcessingRouting,
   } = useDocumentDetail(id, documents, updateDocumentStatus, deleteDocument, addComment);
 
+  const isOwner = Boolean(currentUserId && document?.ownerId && document.ownerId === currentUserId);
+
+  const isCurrentHandler = routingSteps.some(
+    (step, index) =>
+      step.status === 'pending' &&
+      step.receiver_user_id === currentUserId &&
+      (!routingSteps[index - 1] || routingSteps[index - 1].status === 'approved')
+  );
+
+  const canForward = isOwner || isCurrentHandler;
+
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [documentAcknowledgements, setDocumentAcknowledgements] = useState<DocumentAcknowledgement[]>([]);
+  const [isAckLoading, setIsAckLoading] = useState(false);
+  const isAcknowledgedByMe = documentAcknowledgements.some(a => a.userId === currentUserId);
+
+  // Recipient (share) management state — seeded from the document itself
+  const [sharedEmails, setSharedEmails] = useState<string[]>(document?.recipients ?? []);
+  const [newRecipientEmail, setNewRecipientEmail] = useState('');
+  const [isSavingRecipients, setIsSavingRecipients] = useState(false);
+  const [availableUsers, setAvailableUsers] = useState<any[]>([]);
+  const [selDeptId, setSelDeptId] = useState('');
+  const [selUserEmail, setSelUserEmail] = useState('');
+
+  useEffect(() => {
+    import('../services/departments').then(m => {
+      m.fetchUsersWithDepartments().then(setAvailableUsers);
+    });
+  }, []);
+
+  // Routing action modal state
+  const [routingModal, setRoutingModal] = useState<{ action: 'approve' | 'reject' | 'return', stepId: string } | null>(null);
+  const [routingComment, setRoutingComment] = useState('');
+
+  // Forwarding searchable selector state
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showResults, setShowResults] = useState(false);
+  const [forwardComment, setForwardComment] = useState('');
+  const [selectedRecipients, setSelectedRecipients] = useState<any[]>([]);
+
+  const { user: useApp_user } = useApp();
+
+  const filteredResults = availableUsers.filter(u =>
+    u.department_id &&
+    (!selDeptId || u.department_id === selDeptId) &&
+    (u.display_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      u.email?.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
+  const fetchAcks = useCallback(async () => {
+    if (!id) return;
+    try {
+      const acks = await fetchAcknowledgements([id]);
+      setDocumentAcknowledgements(acks);
+    } catch (err) {
+      console.error('Failed to fetch acknowledgements', err);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    fetchAcks();
+  }, [fetchAcks]);
+
+  const handleAcknowledgeDocument = async () => {
+    if (!id || !currentUserId || !useApp_user || isAckLoading || !document) return;
+
+    setIsAckLoading(true);
+    try {
+      await acknowledgeDocument(id, currentUserId, useApp_user.name);
+      toast.success('Document acknowledged');
+      await fetchAcks();
+
+      // Automatically "Approve" if it's the current handler's turn
+      if (isCurrentHandler) {
+        const pendingStep = routingSteps.find(s => s.status === 'pending' && s.receiver_user_id === currentUserId);
+        if (pendingStep) {
+          await handleRoutingAction(document, pendingStep.id, 'approve', useApp_user.name, currentUserId, 'Acknowledged and approved.');
+        }
+      }
+
+      // Notify owner
+      if (document.ownerId && document.ownerId !== currentUserId) {
+        notificationService.createNotification({
+          userId: document.ownerId,
+          title: 'Document Acknowledged',
+          message: `${useApp_user.name} acknowledged "${document.title}"`,
+          type: 'success',
+          link: `/documents/${document.id}`,
+        }).catch(() => { });
+      }
+
+      await refreshDocuments();
+      loadHistory();
+    } catch (err) {
+      toast.error('Failed to acknowledge document');
+    } finally {
+      setIsAckLoading(false);
+    }
+  };
+
+  const addRecipient = () => {
+    const email = newRecipientEmail.trim().toLowerCase();
+    if (!email) return;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) { toast.error('Enter a valid email address'); return; }
+    if (sharedEmails.includes(email)) { toast.error('Email already added'); return; }
+    setSharedEmails((prev) => [...prev, email]);
+    setNewRecipientEmail('');
+  };
+
+  const removeRecipient = (email: string) => {
+    setSharedEmails((prev) => prev.filter((e) => e !== email));
+  };
+
+  const saveRecipients = async () => {
+    if (!document) return;
+    setIsSavingRecipients(true);
+    try {
+      await updateDocumentRecipients(document.id, sharedEmails);
+      await refreshDocuments();
+      setShowShareModal(false);
+      toast.success('Recipients updated successfully.');
+    } catch {
+      toast.error('Failed to save recipients.');
+    } finally {
+      setIsSavingRecipients(false);
+    }
+  };
 
   const backPath = (location.state as { from?: string } | null)?.from ?? '/documents';
+
+  const cardStyle = { backgroundColor: 'var(--card)', borderColor: 'var(--border)' };
+  const textStyle = { color: 'var(--foreground)' };
+  const mutedStyle = { color: 'var(--muted-foreground)' };
+  const mutedBgStyle = { backgroundColor: 'var(--muted)' };
+  const iconBgStyle = { backgroundColor: 'var(--muted)' };
+  const inputStyle = {
+    backgroundColor: 'var(--input-background)',
+    borderColor: 'var(--border)',
+    color: 'var(--foreground)',
+  };
 
   if (!document) {
     return (
@@ -148,22 +303,8 @@ export function DocumentDetail() {
     }
   };
 
-  const onShare = () => {
-    setShowShareModal(false);
-    setShareEmails('');
-    toast.success('Document shared successfully');
-  };
-
   const onDownload = () => toast.success('Downloading document...');
   const onExportPDF = () => toast.success('Exporting to PDF...');
-
-  const cardStyle = { backgroundColor: 'var(--card)', borderColor: 'var(--border)' };
-  const textStyle = { color: 'var(--foreground)' };
-  const mutedStyle = { color: 'var(--muted-foreground)' };
-  const mutedBgStyle = { backgroundColor: 'var(--muted)' };
-  const iconBgStyle = { backgroundColor: 'var(--muted)' };
-
-  const isOwner = Boolean(currentUserId && document.ownerId && document.ownerId === currentUserId);
 
   return (
     <div className="space-y-6">
@@ -284,51 +425,55 @@ export function DocumentDetail() {
               <Paperclip className="size-5 text-blue-600 dark:text-blue-400" />
               <h3 className="text-lg font-semibold" style={textStyle}>
                 Attached Files
-                {batchFiles.length > 1 && (
-                  <span className="ml-2 text-sm font-normal" style={mutedStyle}>({batchFiles.length} files)</span>
+                {files.length > 1 && (
+                  <span className="ml-2 text-sm font-normal" style={mutedStyle}>({files.length} files)</span>
                 )}
               </h3>
             </div>
-            <div className="space-y-3">
-              {batchFiles.map((file) => {
+            <div className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 max-h-[400px] overflow-y-auto pr-2 fade-scroll">
+              {files.map((file: any) => {
                 const fileIconColor =
-                  file.fileType === 'PDF' ? 'text-red-600' :
-                    file.fileType === 'XLSX' ? 'text-green-600' :
-                      (file.fileType === 'DOC' || file.fileType === 'DOCX') ? 'text-blue-600' :
-                        file.fileType === 'IMG' ? 'text-purple-600' : 'text-slate-600';
+                  file.type === 'PDF' ? 'text-red-600' :
+                    file.type === 'XLSX' ? 'text-green-600' :
+                      (file.type === 'DOC' || file.type === 'DOCX') ? 'text-blue-600' :
+                        file.type === 'IMG' ? 'text-purple-600' : 'text-slate-600';
                 const fileIconBg =
-                  file.fileType === 'PDF' ? 'bg-red-500/15' :
-                    file.fileType === 'XLSX' ? 'bg-green-500/15' :
-                      (file.fileType === 'DOC' || file.fileType === 'DOCX') ? 'bg-blue-500/15' :
-                        file.fileType === 'IMG' ? 'bg-purple-500/15' : 'bg-slate-500/15';
+                  file.type === 'PDF' ? 'bg-red-500/15' :
+                    file.type === 'XLSX' ? 'bg-green-500/15' :
+                      (file.type === 'DOC' || file.type === 'DOCX') ? 'bg-blue-500/15' :
+                        file.type === 'IMG' ? 'bg-purple-500/15' : 'bg-slate-500/15';
 
                 return (
                   <div
                     key={file.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => handleOpenFile(file.filePath)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleOpenFile(file.filePath); }}
-                    className="flex items-center gap-3 p-4 rounded-lg border transition-all hover:shadow-md hover:border-blue-300 dark:hover:border-blue-600 cursor-pointer group"
+                    className="rounded-lg border overflow-hidden transition-all hover:shadow-md group"
                     style={{ backgroundColor: 'var(--muted)', borderColor: 'var(--border)' }}
                   >
-                    <div className={`p-2 rounded-lg ${fileIconBg}`}>
-                      <FileText className={`size-5 ${fileIconColor}`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" style={textStyle} title={file.originalFilename || file.title}>
-                        {file.originalFilename || file.title}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs whitespace-nowrap" style={mutedStyle}>
-                      <span className="px-2 py-1 rounded-md bg-black/5 dark:bg-white/5 font-semibold" style={textStyle}>
-                        {file.fileType}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <HardDrive className="size-3" />
-                        {file.fileSize}
-                      </span>
-                      <ExternalLink className="size-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-blue-600 dark:text-blue-400" />
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => handleOpenFile(file.path)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleOpenFile(file.path); }}
+                      className="flex items-center gap-3 p-3 cursor-pointer"
+                    >
+                      <div className={`p-2 rounded-lg ${fileIconBg}`}>
+                        <FileText className={`size-5 ${fileIconColor}`} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" style={textStyle} title={file.name}>
+                          {file.name}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-xs" style={mutedStyle}>
+                        <span className="px-2 py-0.5 rounded-md bg-black/5 dark:bg-white/5 font-semibold" style={textStyle}>
+                          {file.type}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <HardDrive className="size-3" />
+                          {file.size}
+                        </span>
+                        <ExternalLink className="size-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-blue-600 dark:text-blue-400 ml-auto" />
+                      </div>
                     </div>
                   </div>
                 );
@@ -336,50 +481,121 @@ export function DocumentDetail() {
             </div>
           </div>
 
+
+          {/* Document History & Workflow */}
           <div className="rounded-lg shadow-sm border p-6" style={cardStyle}>
-            <h3 className="text-lg font-semibold mb-4" style={textStyle}>Status History</h3>
-            {history.length === 0 ? (
-              <p className="text-sm" style={mutedStyle}>No status history available</p>
-            ) : (
-              <div className="relative">
-                <div className="absolute left-4 top-0 bottom-0 w-0.5" style={mutedBgStyle} />
-                <div className="space-y-6">
-                  {[...history]
-                    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-                    .map((item, index) => (
-                      <div key={item.id} className="relative flex items-start gap-4 pl-10">
-                        <div
-                          className={`absolute left-0 p-2 rounded-full ${index === 0 ? 'bg-blue-600' : ''}`}
-                          style={index === 0 ? undefined : { backgroundColor: 'var(--card)', border: '2px solid var(--border)' }}
-                        >
-                          <div className="size-2" />
-                        </div>
-                        <div className="flex-1 rounded-lg p-4" style={mutedBgStyle}>
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span
-                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(item.status)}`}
-                                >
-                                  {getStatusLabel(item.status)}
-                                </span>
-                              </div>
-                              <p className="text-sm" style={textStyle}>{item.comment}</p>
-                              <div className="mt-2 flex items-center gap-2 text-xs" style={mutedStyle}>
-                                <User className="size-3" />
-                                <span>{item.updatedBy}</span>
-                              </div>
-                            </div>
-                            <div className="text-xs whitespace-nowrap" style={mutedStyle}>
-                              {formatDate(item.timestamp)}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                </div>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-semibold" style={textStyle}>Document History</h3>
+              <div className="flex gap-2">
+                <span className="text-[10px] font-bold px-2 py-1 rounded bg-blue-500/10 text-blue-600 border border-blue-500/20 uppercase">
+                  {routingSteps.length} Sequential Steps
+                </span>
               </div>
-            )}
+            </div>
+
+            <div className="space-y-6">
+              {/* Combine history logs and routing steps for a full timeline */}
+              {history.map((h) => (
+                <div key={h.id} className="relative pl-10 pb-4 border-l-2 border-slate-200 dark:border-slate-800 last:pb-0">
+                  <div className="absolute -left-[11px] top-0 w-5 h-5 rounded-full flex items-center justify-center border-2 bg-slate-100 dark:bg-slate-900 border-slate-300 dark:border-slate-700">
+                    <History className="size-3 text-slate-500" />
+                  </div>
+                  <div className="p-3 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-slate-800">
+                    <div className="flex justify-between items-start gap-2">
+                      <div>
+                        <p className="text-sm font-medium" style={textStyle}>
+                          {h.updatedBy} <span className="font-normal opacity-60" style={mutedStyle}>{h.status === 'acknowledged' ? 'acknowledged the document' : h.comment}</span>
+                        </p>
+                        <p className="text-[10px] mt-1" style={mutedStyle}>{formatDate(h.timestamp)}</p>
+                      </div>
+                      <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-slate-500/10 text-slate-500">
+                        {h.status}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {routingSteps.map((step, index) => {
+                const isCurrent = step.status === 'pending' && (!routingSteps[index - 1] || routingSteps[index - 1].status === 'approved');
+                const isUserRecipient = isCurrent && currentUserId === step.receiver_user_id;
+
+                return (
+                  <div
+                    key={step.id}
+                    className={`relative pl-10 pb-4 border-l-2 last:border-l-0 last:pb-0 ${isCurrent ? 'border-blue-500' : 'border-slate-200 dark:border-slate-800'}`}
+                    style={{ borderLeftStyle: index === routingSteps.length - 1 ? 'none' : 'solid' }}
+                  >
+                    <div
+                      className={`absolute -left-[11px] top-0 w-5 h-5 rounded-full flex items-center justify-center border-2 
+                        ${step.status === 'approved' ? 'bg-green-500 border-green-500' :
+                          step.status === 'rejected' ? 'bg-red-500 border-red-500' :
+                            step.status === 'returned' ? 'bg-orange-500 border-orange-500' :
+                              isCurrent ? 'bg-blue-600 border-blue-600 animate-pulse' : 'bg-slate-100 dark:bg-slate-900 border-slate-300 dark:border-slate-700'}`}
+                    >
+                      {step.status === 'approved' ? <CheckCircle2 className="size-3 text-white" /> :
+                        step.status === 'rejected' ? <X className="size-3 text-white" /> :
+                          step.status === 'returned' ? <ArrowLeft className="size-3 text-white" /> :
+                            <div className={`size-1.5 rounded-full ${isCurrent ? 'bg-white' : 'bg-slate-500'}`} />}
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border bg-slate-50 dark:bg-white/5 shadow-sm" style={{ borderColor: isCurrent ? 'var(--blue-500)' : 'var(--border)' }}>
+                      <div className="flex-1 min-w-0 text-left">
+                        <div className="flex items-center gap-2 mb-1">
+                          <p className="text-sm font-semibold truncate" style={textStyle}>{step.receiver_name}</p>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 font-bold uppercase">
+                            {step.receiver_department_name}
+                          </span>
+                        </div>
+                        <p className="text-xs" style={mutedStyle}>{step.receiver_email}</p>
+                        {step.comment && (
+                          <div className="mt-2 p-2 rounded bg-black/5 dark:bg-white/5 border-l-2 border-blue-500/50">
+                            <p className="text-xs italic" style={textStyle}>&ldquo;{step.comment}&rdquo;</p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col items-end gap-2 shrink-0">
+                        <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded 
+                          ${step.status === 'approved' ? 'bg-green-500/10 text-green-600' :
+                            step.status === 'rejected' ? 'bg-red-500/10 text-red-600' :
+                              step.status === 'returned' ? 'bg-orange-500/10 text-orange-600' :
+                                isCurrent ? 'bg-blue-500/10 text-blue-600' : 'bg-slate-500/10 text-slate-500'}`}
+                        >
+                          {step.status}
+                        </span>
+                        {step.action_at && (
+                          <p className="text-[10px]" style={mutedStyle}>{formatDate(step.action_at)}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {isUserRecipient && (
+                      <div className="flex gap-2 mt-3 animate-in fade-in slide-in-from-top-2">
+                        <button
+                          onClick={() => { setRoutingModal({ action: 'approve', stepId: step.id }); setRoutingComment(''); }}
+                          className="flex-1 py-2 bg-green-600 text-white text-xs font-bold rounded-lg hover:bg-green-700 transition-colors uppercase tracking-wider shadow-sm"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => { setRoutingModal({ action: 'return', stepId: step.id }); setRoutingComment(''); }}
+                          className="flex-1 py-2 bg-orange-500 text-white text-xs font-bold rounded-lg hover:bg-orange-600 transition-colors uppercase tracking-wider shadow-sm"
+                        >
+                          Return
+                        </button>
+                        <button
+                          onClick={() => { setRoutingModal({ action: 'reject', stepId: step.id }); setRoutingComment(''); }}
+                          className="flex-1 py-2 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700 transition-colors uppercase tracking-wider shadow-sm"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -388,7 +604,7 @@ export function DocumentDetail() {
             <h3 className="text-lg font-semibold mb-4" style={textStyle}>Quick Actions</h3>
             {!isOwner && (
               <p className="text-sm mb-3" style={mutedStyle}>
-                You can add comments. Only the document owner can update status, share, or delete.
+                You can add comments and acknowledge files. Only the document owner can update status or manage recipients.
               </p>
             )}
             <div className="space-y-3">
@@ -400,22 +616,24 @@ export function DocumentDetail() {
                   Update Status
                 </button>
               )}
-              <button
-                onClick={() => setShowCommentModal(true)}
-                className="w-full px-4 py-2 border rounded-lg transition-colors font-medium text-sm flex items-center justify-center gap-2"
-                style={{ ...cardStyle, color: 'var(--foreground)' }}
-              >
-                <MessageSquare className="size-4" />
-                Add Comment
-              </button>
-              {isOwner && (
+              {!isAcknowledgedByMe && (
+                <button
+                  onClick={handleAcknowledgeDocument}
+                  disabled={isAckLoading}
+                  className="w-full px-4 py-2 bg-green-600/10 text-green-600 hover:bg-green-600 hover:text-white rounded-lg transition-all font-medium text-sm flex items-center justify-center gap-2 border border-green-600/20"
+                >
+                  {isAckLoading ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
+                  Acknowledge Document
+                </button>
+              )}
+              {canForward && (
                 <button
                   onClick={() => setShowShareModal(true)}
                   className="w-full px-4 py-2 border rounded-lg transition-colors font-medium text-sm flex items-center justify-center gap-2"
                   style={{ ...cardStyle, color: 'var(--foreground)' }}
                 >
-                  <Share2 className="size-4" />
-                  Share Document
+                  <Forward className="size-4" />
+                  Forward to Next
                 </button>
               )}
               <button
@@ -435,11 +653,11 @@ export function DocumentDetail() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {batchFiles.length > 1 ? `Delete all ${batchFiles.length} files?` : 'Delete document?'}
+              {files.length > 1 ? `Delete all ${files.length} files?` : 'Delete document?'}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {batchFiles.length > 1
-                ? `This action cannot be undone. All ${batchFiles.length} files in this upload will be permanently removed from the system.`
+              {files.length > 1
+                ? `This action cannot be undone. All ${files.length} files in this upload will be permanently removed from the system.`
                 : `This action cannot be undone. The document "${document.title}" will be permanently removed from the system.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -448,14 +666,17 @@ export function DocumentDetail() {
             <AlertDialogAction
               onClick={onDelete}
               disabled={isDeleting}
-              className="bg-red-600 hover:bg-red-700 text-white focus:ring-red-600 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              variant="destructive"
+              className="!text-white border-red-600"
+              style={{ backgroundColor: '#d4183d', color: '#fff' }}
             >
-              {isDeleting && <Loader2 className="size-4 animate-spin" />}
               {isDeleting ? 'Deleting...' : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <FullScreenLoader isOpen={isDeleting} message={files.length > 1 ? `Deleting ${files.length} files...` : 'Deleting Document...'} />
 
       <Dialog open={showStatusModal} onOpenChange={setShowStatusModal}>
         <DialogContent className="sm:max-w-md">
@@ -477,20 +698,14 @@ export function DocumentDetail() {
                     borderColor: 'var(--border)',
                   }}
                 >
-                  <SelectItem value="draft" className="focus:bg-[var(--accent)] focus:text-[var(--accent-foreground)] text-[var(--popover-foreground)]">
-                    Draft
+                  <SelectItem value="sent" className="focus:bg-[var(--accent)] focus:text-[var(--accent-foreground)] text-[var(--popover-foreground)]">
+                    Sent
                   </SelectItem>
-                  <SelectItem value="under-review" className="focus:bg-[var(--accent)] focus:text-[var(--accent-foreground)] text-[var(--popover-foreground)]">
-                    Pending
+                  <SelectItem value="viewed" className="focus:bg-[var(--accent)] focus:text-[var(--accent-foreground)] text-[var(--popover-foreground)]">
+                    Viewed
                   </SelectItem>
-                  <SelectItem value="approved" className="focus:bg-[var(--accent)] focus:text-[var(--accent-foreground)] text-[var(--popover-foreground)]">
-                    Approved
-                  </SelectItem>
-                  <SelectItem value="rejected" className="focus:bg-[var(--accent)] focus:text-[var(--accent-foreground)] text-[var(--popover-foreground)]">
-                    Rejected
-                  </SelectItem>
-                  <SelectItem value="archived" className="focus:bg-[var(--accent)] focus:text-[var(--accent-foreground)] text-[var(--popover-foreground)]">
-                    Archived
+                  <SelectItem value="acknowledged" className="focus:bg-[var(--accent)] focus:text-[var(--accent-foreground)] text-[var(--popover-foreground)]">
+                    Acknowledged
                   </SelectItem>
                 </SelectContent>
               </Select>
@@ -574,58 +789,175 @@ export function DocumentDetail() {
       <Dialog open={showShareModal} onOpenChange={setShowShareModal}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Share Document</DialogTitle>
+            <DialogTitle>Forward Document</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div>
-              <label className="block text-sm font-medium mb-2" style={textStyle}>Email Addresses</label>
-              <input
-                type="text"
-                value={shareEmails}
-                onChange={(e) => setShareEmails(e.target.value)}
-                placeholder="email1@example.com, email2@example.com"
-                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-[var(--input-background)]"
-                style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}
-              />
-              <p className="mt-1 text-xs" style={mutedStyle}>Separate multiple emails with commas</p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2" style={textStyle}>Permission Level</label>
-              <Select value={sharePermission} onValueChange={setSharePermission}>
-                <SelectTrigger className="w-full h-10 rounded-lg border focus:ring-2 focus:ring-blue-500 bg-[var(--input-background)] [border-color:var(--border)] text-foreground">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent
-                  className="border"
-                  style={{
-                    backgroundColor: 'var(--popover)',
-                    color: 'var(--popover-foreground)',
-                    borderColor: 'var(--border)',
+            <p className="text-sm" style={mutedStyle}>
+              Select the next department or personnel to handle this document.
+            </p>
+
+            <div className="grid grid-cols-1 gap-4">
+              <div>
+                <label className="block text-[10px] font-bold uppercase mb-1.5 opacity-60" style={textStyle}>Filter By Department</label>
+                <select
+                  value={selDeptId}
+                  onChange={(e) => {
+                    setSelDeptId(e.target.value);
                   }}
+                  className="w-full text-sm px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                  style={inputStyle}
                 >
-                  <SelectItem value="view" className="focus:bg-[var(--accent)] focus:text-[var(--accent-foreground)] text-[var(--popover-foreground)]">
-                    View only
-                  </SelectItem>
-                  <SelectItem value="comment" className="focus:bg-[var(--accent)] focus:text-[var(--accent-foreground)] text-[var(--popover-foreground)]">
-                    Can comment
-                  </SelectItem>
-                  <SelectItem value="edit" className="focus:bg-[var(--accent)] focus:text-[var(--accent-foreground)] text-[var(--popover-foreground)]">
-                    Can edit
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+                  <option value="">All Departments</option>
+                  {Array.from(new Set(availableUsers.filter(u => u.department_id).map(u => JSON.stringify({ id: u.department_id, name: u.department_name }))))
+                    .map(s => JSON.parse(s))
+                    .map(dept => (
+                      <option key={dept.id} value={dept.id}>{dept.name}</option>
+                    ))
+                  }
+                </select>
+              </div>
+              <div className="relative">
+                <label className="block text-[10px] font-bold uppercase mb-1.5 opacity-60" style={textStyle}>Select Next Handler</label>
+                <div
+                  className="flex items-center px-4 py-2.5 rounded-xl border focus-within:ring-2 focus-within:ring-blue-500 transition-all font-sans"
+                  style={inputStyle}
+                >
+                  <Search className="size-4 mr-2 opacity-50" />
+                  <input
+                    type="text"
+                    placeholder="Search name or email..."
+                    value={searchTerm}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      setShowResults(true);
+                    }}
+                    onFocus={() => setShowResults(true)}
+                    className="bg-transparent border-none outline-none flex-1 text-sm placeholder:opacity-50"
+                  />
+                  {searchTerm ? (
+                    <button onClick={() => setSearchTerm('')} type="button" className="opacity-50 hover:opacity-100">
+                      <X className="size-4" />
+                    </button>
+                  ) : <ChevronDown className="size-4 opacity-30" />}
+                </div>
+
+                {showResults && (searchTerm || selDeptId) && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setShowResults(false)} />
+                    <div className="absolute z-50 w-full mt-2 max-h-60 overflow-y-auto rounded-xl border shadow-2xl bg-white dark:bg-slate-900 animate-in fade-in zoom-in-95 duration-200" style={{ borderColor: 'var(--border)' }}>
+                      {filteredResults.length === 0 ? (
+                        <div className="p-8 text-center" style={mutedStyle}>
+                          <Users className="size-8 mx-auto mb-2 opacity-20" />
+                          <p className="text-sm">No users found</p>
+                        </div>
+                      ) : (
+                        filteredResults.map(u => (
+                          <button
+                            key={u.id}
+                            type="button"
+                            onClick={() => {
+                              if (!selectedRecipients.find(r => r.id === u.id)) {
+                                setSelectedRecipients(prev => [...prev, u]);
+                              }
+                              setSearchTerm('');
+                              setShowResults(false);
+                            }}
+                            className="w-full text-left p-3.5 hover:bg-blue-600/10 transition-colors border-b last:border-0 flex items-center gap-3"
+                            style={{ borderColor: 'var(--border)' }}
+                          >
+                            <div className="w-8 h-8 rounded-full bg-blue-600/10 flex items-center justify-center text-blue-600 font-bold text-xs font-sans">
+                              {u.display_name?.charAt(0)}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold truncate" style={textStyle}>{u.display_name}</p>
+                              <p className="text-[10px] opacity-60 truncate" style={mutedStyle}>{u.email} • {u.department_name}</p>
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {selectedRecipients.length > 0 && (
+                <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                  {selectedRecipients.map((recipient) => (
+                    <div key={recipient.id} className="p-3 rounded-xl border bg-[var(--muted)] flex items-center justify-between shadow-sm" style={{ borderColor: 'var(--border)' }}>
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-blue-600/10 flex items-center justify-center text-blue-600 shadow-inner">
+                          <Mail className="size-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold truncate max-w-[150px]" style={textStyle}>{recipient.display_name}</p>
+                          <p className="text-[10px] opacity-60 truncate max-w-[150px]" style={mutedStyle}>
+                            {recipient.department_name}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedRecipients(prev => prev.filter(r => r.id !== recipient.id))}
+                        className="p-1.5 hover:bg-red-500/10 text-red-600 rounded-lg transition-all"
+                        title="Remove"
+                      >
+                        <X className="size-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase mb-1.5 opacity-60" style={textStyle}>Forwarding Comment</label>
+                <textarea
+                  value={forwardComment}
+                  onChange={(e) => setForwardComment(e.target.value)}
+                  placeholder="Add a reason for forwarding..."
+                  rows={3}
+                  className="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none bg-[var(--input-background)] text-sm"
+                  style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}
+                />
+              </div>
             </div>
+
             <div className="flex gap-3 pt-2">
               <button
-                onClick={onShare}
-                disabled={!shareEmails.trim()}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                type="button"
+                onClick={async () => {
+                  if (selectedRecipients.length > 0 && document && useApp_user && currentUserId) {
+                    // Sequential forwarding for each recipient
+                    for (const recipient of selectedRecipients) {
+                      await handleForward(
+                        document,
+                        {
+                          id: recipient.id,
+                          email: recipient.email,
+                          name: recipient.display_name,
+                          departmentId: recipient.department_id
+                        },
+                        {
+                          id: currentUserId,
+                          name: useApp_user.name
+                        },
+                        forwardComment
+                      );
+                    }
+                    setSelectedRecipients([]);
+                    setForwardComment('');
+                  }
+                }}
+                disabled={selectedRecipients.length === 0 || isForwarding}
+                className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all font-bold text-sm uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                Share
+                {isForwarding && <Loader2 className="size-4 animate-spin" />}
+                {isForwarding ? 'Forwarding...' : 'Confirm Forward'}
               </button>
               <button
+                type="button"
                 onClick={() => setShowShareModal(false)}
-                className="px-4 py-2 border rounded-lg transition-colors"
+                disabled={isForwarding}
+                className="px-6 py-3 border rounded-xl transition-colors font-bold text-sm uppercase tracking-widest"
                 style={{ ...cardStyle, color: 'var(--foreground)' }}
               >
                 Cancel
@@ -634,6 +966,73 @@ export function DocumentDetail() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+      <Dialog open={!!routingModal} onOpenChange={(open) => !open && setRoutingModal(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="uppercase tracking-widest text-center">
+              Confirm {routingModal?.action}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className={`p-4 rounded-lg border text-center ${routingModal?.action === 'approve' ? 'bg-green-500/10 border-green-500/20 text-green-700' :
+              routingModal?.action === 'return' ? 'bg-orange-500/10 border-orange-500/20 text-orange-700' :
+                'bg-red-500/10 border-red-500/20 text-red-700'
+              }`}>
+              <p className="text-sm font-semibold">
+                Are you sure you want to <strong>{routingModal?.action}</strong> this document?
+              </p>
+              {routingModal?.action === 'approve' && <p className="text-xs mt-1 opacity-80">This will forward it to the next recipient in the chain.</p>}
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider mb-2" style={mutedStyle}>
+                Add a comment (Optional)
+              </label>
+              <textarea
+                value={routingComment}
+                onChange={(e) => setRoutingComment(e.target.value)}
+                placeholder={`Why are you ${routingModal?.action}ing this?`}
+                rows={3}
+                className="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none bg-[var(--input-background)] text-sm"
+                style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                disabled={isProcessingRouting}
+                onClick={async () => {
+                  if (routingModal && document && useApp_user && currentUserId) {
+                    try {
+                      await handleRoutingAction(document, routingModal.stepId, routingModal.action, useApp_user.name, currentUserId, routingComment);
+                      setRoutingModal(null);
+                      toast.success(`Document ${routingModal.action}d successfully`);
+                    } catch (err) {
+                      toast.error(`Failed to ${routingModal.action} document`);
+                    }
+                  }
+                }}
+                className={`flex-1 py-3 text-white rounded-xl font-bold text-sm uppercase tracking-widest transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 ${routingModal?.action === 'approve' ? 'bg-green-600 hover:bg-green-700' :
+                  routingModal?.action === 'return' ? 'bg-orange-500 hover:bg-orange-600' :
+                    'bg-red-600 hover:bg-red-700'
+                  }`}
+              >
+                {isProcessingRouting && <Loader2 className="size-4 animate-spin" />}
+                Confirm {routingModal?.action}
+              </button>
+              <button
+                type="button"
+                onClick={() => setRoutingModal(null)}
+                className="px-6 py-3 border rounded-xl text-sm font-bold uppercase tracking-widest transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+                style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div >
   );
 }

@@ -22,11 +22,12 @@ export function Notifications() {
   const handleMarkOne = async (notificationId: string, link?: string | null) => {
     if (markingId !== null) return;
     setMarkingId(notificationId);
+    // Navigate immediately for a responsive feel
+    if (link) navigate(link, { state: { from: '/notifications' } });
     try {
       await markNotificationAsRead(notificationId);
-      if (link) navigate(link, { state: { from: '/notifications' } });
     } finally {
-      setMarkingId(null);
+      if (!link) setMarkingId(null); // Keep loading state if navigating away
     }
   };
 

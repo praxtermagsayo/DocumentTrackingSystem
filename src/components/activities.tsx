@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router';
-import { Calendar, Plus, Trash2 } from 'lucide-react';
+import { Calendar, Plus, Trash2, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import * as activityService from '../services/activities';
 import * as eventCategoryService from '../services/eventCategories';
@@ -8,7 +8,8 @@ import type { Activity, EventCategory } from '../types';
 import { formatDate } from '../lib/format';
 import { PageTransition } from './page-transition';
 import { Skeleton } from './ui/skeleton';
-import { toast } from 'sonner';
+import { FullScreenLoader } from './ui/full-screen-loader';
+import { toast } from '../lib/toast';
 
 function toLocalDateOnly(d: Date): string {
   const y = d.getFullYear();
@@ -29,7 +30,6 @@ export function Activities() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [categories, setCategories] = useState<EventCategory[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showCreateForm, setShowCreateForm] = useState(false);
 
   const [postDate, setPostDate] = useState(() => toLocalDateOnly(new Date()));
   const [eventStart, setEventStart] = useState(() => {
@@ -56,7 +56,7 @@ export function Activities() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user?.id) return;
     try {
-      const cats = await eventCategoryService.fetchEventCategories(session.user.id);
+      const cats = await eventCategoryService.fetchEventCategories();
       setCategories(cats);
     } catch (err) {
       setCategories([]);
@@ -64,7 +64,7 @@ export function Activities() {
       toast.error('Could not load categories. Make sure the migration add-activity-scheduling.sql was run.');
     }
     try {
-      const acts = await activityService.fetchActivities(session.user.id);
+      const acts = await activityService.fetchActivities();
       setActivities(acts);
     } catch {
       setActivities([]);
@@ -142,7 +142,7 @@ export function Activities() {
   };
 
   return (
-    <PageTransition className="space-y-6 max-w-4xl">
+    <PageTransition className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
@@ -164,148 +164,144 @@ export function Activities() {
             Post and manage your scheduled activities
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowCreateForm(!showCreateForm)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-        >
-          {showCreateForm ? 'Cancel' :
-            <>
-              <Plus className="size-4" />
-              <span>Post Activity</span>
-            </>}
-        </button>
       </div>
 
-      {showCreateForm && (
-        <div className="rounded-lg shadow-sm border p-6" style={cardStyle}>
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2" style={textStyle}>
-            <Plus className="size-5" />
-            Post an activity
-          </h2>
-          {loading ? (
-            <div className="space-y-3">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-24 w-full" />
-            </div>
-          ) : categories.length === 0 ? (
-            <p style={mutedStyle}>
-              <button
-                type="button"
-                onClick={() => navigate('/event-categories')}
-                className="text-blue-600 dark:text-blue-400 hover:underline"
-              >
-                Create an event category
-              </button>{' '}
-              first to post activities.
-            </p>
-          ) : (
-            <form onSubmit={handleCreate} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="post-date" className="block text-sm font-medium mb-2" style={textStyle}>
-                    Post date <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    id="post-date"
-                    type="date"
-                    value={postDate}
-                    onChange={(e) => setPostDate(e.target.value)}
-                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    style={inputStyle}
-                    required
-                  />
-                </div>
-                <div>
-                  <label htmlFor="category" className="block text-sm font-medium mb-2" style={textStyle}>
-                    Event category <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    id="category"
-                    value={categoryId}
-                    onChange={(e) => setCategoryId(e.target.value)}
-                    className="w-full pl-4 pr-8 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
-                    style={inputStyle}
-                    required
-                  >
-                    <option value="">Select category</option>
-                    {categories.map((cat) => (
-                      <option key={cat.id} value={cat.id}>{cat.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="event-start" className="block text-sm font-medium mb-2" style={textStyle}>
-                    Event start <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    id="event-start"
-                    type="datetime-local"
-                    value={eventStart}
-                    onChange={(e) => setEventStart(e.target.value)}
-                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    style={inputStyle}
-                    required
-                  />
-                </div>
-                <div>
-                  <label htmlFor="event-end" className="block text-sm font-medium mb-2" style={textStyle}>
-                    Event end <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    id="event-end"
-                    type="datetime-local"
-                    value={eventEnd}
-                    onChange={(e) => setEventEnd(e.target.value)}
-                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    style={inputStyle}
-                    required
-                  />
-                </div>
-              </div>
+      <div className="rounded-lg shadow-sm border p-6" style={cardStyle}>
+        <h2 className="text-lg font-semibold mb-4 flex items-center gap-2" style={textStyle}>
+          <Plus className="size-5" />
+          Post an activity
+        </h2>
+        {loading ? (
+          <div className="space-y-3">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-24 w-full" />
+          </div>
+        ) : categories.length === 0 ? (
+          <p style={mutedStyle}>
+            <button
+              type="button"
+              onClick={() => navigate('/event-categories')}
+              className="text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              Create an event category
+            </button>{' '}
+            first to post activities.
+          </p>
+        ) : (
+          <form onSubmit={handleCreate} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label htmlFor="description" className="block text-sm font-medium mb-2" style={textStyle}>
-                  Event description
+                <label htmlFor="post-date" className="block text-sm font-medium mb-2" style={textStyle}>
+                  Post date <span className="text-red-500">*</span>
                 </label>
-                <textarea
-                  id="description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={4}
-                  className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                  placeholder="Describe the activity..."
+                <input
+                  id="post-date"
+                  type="date"
+                  value={postDate}
+                  onChange={(e) => setPostDate(e.target.value)}
+                  className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   style={inputStyle}
+                  required
                 />
               </div>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isSubmitting ? 'Posting...' : 'Post Activity'}
-              </button>
-            </form>
-          )}
-        </div>
-      )}
+              <div>
+                <label htmlFor="category" className="block text-sm font-medium mb-2" style={textStyle}>
+                  Event category <span className="text-red-500">*</span>
+                </label>
+                <select
+                  id="category"
+                  value={categoryId}
+                  onChange={(e) => setCategoryId(e.target.value)}
+                  className="w-full pl-4 pr-8 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+                  style={inputStyle}
+                  required
+                >
+                  <option value="">Select category</option>
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="event-start" className="block text-sm font-medium mb-2" style={textStyle}>
+                  Event start <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="event-start"
+                  type="datetime-local"
+                  value={eventStart}
+                  onChange={(e) => setEventStart(e.target.value)}
+                  className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  style={inputStyle}
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="event-end" className="block text-sm font-medium mb-2" style={textStyle}>
+                  Event end <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="event-end"
+                  type="datetime-local"
+                  value={eventEnd}
+                  onChange={(e) => setEventEnd(e.target.value)}
+                  className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  style={inputStyle}
+                  required
+                />
+              </div>
+            </div>
+            <div>
+              <label htmlFor="description" className="block text-sm font-medium mb-2" style={textStyle}>
+                Event description
+              </label>
+              <textarea
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={4}
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                placeholder="Describe the activity..."
+                style={inputStyle}
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? 'Posting...' : 'Post Activity'}
+            </button>
+          </form>
+        )}
+      </div>
+
+      <FullScreenLoader isOpen={isSubmitting} message="Posting new activity..." />
 
       <div className="rounded-lg shadow-sm border p-6" style={cardStyle}>
         <h2 className="text-lg font-semibold mb-4" style={textStyle}>List of Events</h2>
         {loading ? (
-          <p style={mutedStyle}>Loading...</p>
+          <div className="space-y-4">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </div>
         ) : activities.length === 0 ? (
           <p style={mutedStyle}>No events yet. Post one above.</p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto animate-elastic-pop">
             <table className="w-full border-collapse">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border)' }}>
                   <th className="text-left py-3 px-4 font-medium" style={textStyle}>Event Name</th>
+                  <th className="text-left py-3 px-4 font-medium" style={textStyle}>Creator</th>
+                  <th className="text-left py-3 px-4 font-medium" style={textStyle}>Posted Date</th>
                   <th className="text-left py-3 px-4 font-medium" style={textStyle}>Event Start</th>
                   <th className="text-left py-3 px-4 font-medium" style={textStyle}>Event End</th>
+                  <th className="text-left py-3 px-4 font-medium" style={textStyle}>Status</th>
                   <th className="w-10" />
                 </tr>
               </thead>
@@ -313,6 +309,19 @@ export function Activities() {
                 {activities.map((act) => {
                   const catName = categories.find((c) => c.id === act.categoryId)?.name ?? 'Unknown';
                   const eventName = act.description?.trim() || catName || '—';
+                  const now = new Date();
+                  const start = new Date(act.eventStart);
+                  const end = new Date(act.eventEnd);
+                  let statusStr = 'Upcoming';
+                  let statusColor = 'text-blue-600 dark:text-blue-400';
+                  if (now >= start && now <= end) {
+                    statusStr = 'Active';
+                    statusColor = 'text-green-600 dark:text-green-400';
+                  } else if (now > end) {
+                    statusStr = 'Completed';
+                    statusColor = 'text-gray-500 dark:text-gray-400';
+                  }
+
                   const dateTimeOpts: Intl.DateTimeFormatOptions = {
                     month: 'short',
                     day: 'numeric',
@@ -327,11 +336,18 @@ export function Activities() {
                       className="hover:bg-[var(--muted)]/50 transition-colors"
                     >
                       <td className="py-3 px-4" style={textStyle}>{eventName}</td>
+                      <td className="py-3 px-4" style={textStyle}>{act.creatorName}</td>
+                      <td className="py-3 px-4" style={mutedStyle}>
+                        {formatDate(act.postDate, { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </td>
                       <td className="py-3 px-4" style={mutedStyle}>
                         {formatDate(act.eventStart, dateTimeOpts)}
                       </td>
                       <td className="py-3 px-4" style={mutedStyle}>
                         {formatDate(act.eventEnd, dateTimeOpts)}
+                      </td>
+                      <td className={`py-3 px-4 font-medium ${statusColor}`}>
+                        {statusStr}
                       </td>
                       <td className="py-3 px-4">
                         <button

@@ -7,6 +7,7 @@ export interface EventCategoryRow {
   status: string;
   created_by: string;
   created_at: string;
+  profiles?: { display_name: string } | null;
 }
 
 function rowToCategory(row: EventCategoryRow): EventCategory {
@@ -15,6 +16,7 @@ function rowToCategory(row: EventCategoryRow): EventCategory {
     name: row.name,
     status: row.status as EventCategoryStatus,
     createdBy: row.created_by,
+    creatorName: row.profiles?.display_name || 'Unknown User',
     createdAt: row.created_at,
   };
 }
@@ -22,7 +24,7 @@ function rowToCategory(row: EventCategoryRow): EventCategory {
 export async function fetchEventCategories(): Promise<EventCategory[]> {
   const { data, error } = await supabase
     .from('event_categories')
-    .select('*')
+    .select('*, profiles(display_name)')
     .order('name');
 
   if (error) throw error;

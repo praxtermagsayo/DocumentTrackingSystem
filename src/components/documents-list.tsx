@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router';
 import { DocumentStatus } from '../types';
+import { getStatusColor, getStatusLabel } from '../lib/format';
 import { Search, Filter, FileText, X } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { documentMatchesSearch } from '../lib/search';
@@ -47,20 +48,8 @@ export function DocumentsList() {
     return matchesSearch && matchesStatus && matchesCategory;
   });
 
-  const groupedDocuments = useMemo(() => {
-    const groups: Record<string, any> = {};
-    filteredDocuments.forEach(doc => {
-      const tid = doc.trackingId;
-      if (!groups[tid]) {
-        groups[tid] = { ...doc, files: [doc] };
-      } else {
-        groups[tid].files.push(doc);
-        if (new Date(doc.updatedAt) > new Date(groups[tid].updatedAt)) {
-          groups[tid].updatedAt = doc.updatedAt;
-        }
-      }
-    });
-    return Object.values(groups).sort((a: any, b: any) =>
+  const sortedDocuments = useMemo(() => {
+    return [...filteredDocuments].sort((a, b) =>
       new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
   }, [filteredDocuments]);
@@ -70,29 +59,6 @@ export function DocumentsList() {
   const mutedStyle = { color: 'var(--muted-foreground)' };
   const inputStyle = { backgroundColor: 'var(--input-background)', color: 'var(--foreground)', borderColor: 'var(--border)' };
 
-  const getStatusColor = (status: DocumentStatus) => {
-    switch (status) {
-      case 'approved':
-        return 'bg-green-500/20 text-green-800 dark:text-green-400';
-      case 'under-review':
-        return 'bg-yellow-500/20 text-yellow-800 dark:text-yellow-400';
-      case 'draft':
-        return 'bg-slate-500/20 text-slate-700 dark:text-slate-300';
-      case 'rejected':
-        return 'bg-red-500/20 text-red-800 dark:text-red-400';
-      case 'archived':
-        return 'bg-gray-500/20 text-gray-700 dark:text-gray-300';
-    }
-  };
-
-  const getStatusLabel = (status: DocumentStatus) => {
-    switch (status) {
-      case 'under-review':
-        return 'Pending';
-      default:
-        return status.charAt(0).toUpperCase() + status.slice(1);
-    }
-  };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -143,11 +109,9 @@ export function DocumentsList() {
                 style={inputStyle}
               >
                 <option value="all">All Statuses</option>
-                <option value="draft">Draft</option>
-                <option value="under-review">Pending</option>
-                <option value="approved">Approved</option>
-                <option value="rejected">Rejected</option>
-                <option value="archived">Archived</option>
+                <option value="sent">Sent</option>
+                <option value="viewed">Viewed</option>
+                <option value="acknowledged">Acknowledged</option>
               </select>
             </div>
           </div>
@@ -174,7 +138,7 @@ export function DocumentsList() {
         {/* Results Count */}
         <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--border)' }}>
           <p className="text-sm" style={mutedStyle}>
-            Showing <span className="font-medium" style={textStyle}>{groupedDocuments.length}</span> upload sessions
+            Showing <span className="font-medium" style={textStyle}>{sortedDocuments.length}</span> upload sessions
           </p>
         </div>
       </div>
@@ -189,18 +153,18 @@ export function DocumentsList() {
           </div>
         ) : (
           <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
-            {groupedDocuments.map((doc: any) => (
+            {sortedDocuments.map((doc: any) => (
               <Link
-                key={doc.trackingId}
+                key={doc.id}
                 to={doc.status === 'draft' ? `/upload?edit=${doc.id}` : `/documents/${doc.id}`}
                 state={{ from: location.pathname }}
                 className="block px-6 py-5 transition-colors hover:opacity-90"
                 style={{ backgroundColor: 'var(--card)' }}
               >
                 <div className="flex items-start gap-4">
-                  <div className={`mt-1 p-2 ${doc.files.length > 1 ? 'bg-blue-600/10' : 'bg-blue-500/15'} rounded-lg relative`}>
-                    <FileText className={`size-5 ${doc.files.length > 1 ? 'text-blue-600' : 'text-blue-600 dark:text-blue-400'}`} />
-                    {doc.files.length > 1 && (
+                  <div className={`mt-1 p-2 ${doc.files?.length > 1 ? 'bg-blue-600/10' : 'bg-blue-500/15'} rounded-lg relative`}>
+                    <FileText className={`size-5 ${doc.files?.length > 1 ? 'text-blue-600' : 'text-blue-600 dark:text-blue-400'}`} />
+                    {doc.files?.length > 1 && (
                       <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-[10px] size-3.5 rounded-full flex items-center justify-center border border-white dark:border-slate-900">
                         {doc.files.length}
                       </span>
@@ -211,7 +175,7 @@ export function DocumentsList() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <h3 className="font-medium truncate" style={textStyle} title={doc.title}>{doc.title}</h3>
-                          {doc.files.length > 1 && (
+                          {doc.files?.length > 1 && (
                             <span className="px-1.5 py-0.5 rounded-md bg-blue-500/10 text-blue-600 text-[10px] font-semibold whitespace-nowrap">
                               BATCH
                             </span>
@@ -241,7 +205,7 @@ export function DocumentsList() {
                       </span>
                       <span>•</span>
                       <span className="inline-flex items-center gap-1 text-blue-600 font-mono">
-                        {doc.trackingId}
+                        #{doc.id.split('-')[0].toUpperCase()}
                       </span>
                     </div>
                   </div>

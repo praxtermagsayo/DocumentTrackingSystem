@@ -1,11 +1,12 @@
-import { Upload, FileText, X, CheckCircle, Mail, Plus, Trash2, Send, Save, Grid, Paperclip } from 'lucide-react';
+import { Upload, FileText, X, CheckCircle, Mail, Search, Trash2, Send, Save, Grid, Paperclip, Loader2, Users, ChevronDown, ChevronUp } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { useUploadDocument, ALLOWED_EXTENSIONS } from '../hooks/useUploadDocument';
 import { formatFileSize } from '../lib/format';
 import { supabase } from '../lib/supabase';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { toast } from 'sonner';
+import { toast } from '../lib/toast';
+import { FullScreenLoader } from './ui/full-screen-loader';
 
 export function UploadDocument() {
   const navigate = useNavigate();
@@ -28,8 +29,12 @@ export function UploadDocument() {
     handleFileChange,
     removeFile,
     clearFile,
+    addRecipient,
+    removeRecipient,
     handleSubmit,
     categories,
+    availableUsers,
+    departments,
     loadCategories,
     loadDraft,
     removeExistingFile,
@@ -49,28 +54,18 @@ export function UploadDocument() {
     loadCategories();
   }, [loadCategories]);
 
-  const [recipientEmail, setRecipientEmail] = useState('');
+  const [selectedDeptId, setSelectedDeptId] = useState('');
+  const [selectedUserEmail, setSelectedUserEmail] = useState('');
 
-  const addRecipient = () => {
-    const email = recipientEmail.trim();
-    if (!email) return;
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      toast.error('Please enter a valid email address');
-      return;
-    }
-    if (formData.recipients.includes(email)) {
-      toast.error('This email is already added');
-      return;
-    }
-    setFormData({ ...formData, recipients: [...formData.recipients, email] });
-    setRecipientEmail('');
-  };
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showResults, setShowResults] = useState(false);
 
-  const removeRecipient = (email: string) => {
-    setFormData({ ...formData, recipients: formData.recipients.filter(r => r !== email) });
-  };
+  const filteredResults = availableUsers.filter(u =>
+    u.department_id &&
+    (!selectedDeptId || u.department_id === selectedDeptId) &&
+    (u.display_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      u.email?.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
 
   const accept = ALLOWED_EXTENSIONS.join(',');
 
@@ -152,14 +147,14 @@ export function UploadDocument() {
           </div>
 
           {(formData.files.length > 0 || formData.existingFiles.length > 0) && (
-            <div className="mt-4 space-y-2">
+            <div className="mt-4 space-y-2 max-h-[300px] overflow-y-auto pr-2 fade-scroll">
               {/* Existing Attachments */}
               {formData.existingFiles.map((file) => (
                 <div key={file.id} className="flex items-center gap-3 p-3 rounded-lg border bg-blue-500/5" style={{ borderColor: 'var(--border)' }}>
                   <Paperclip className="size-5 text-blue-500" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate" style={textStyle}>{file.title}</p>
-                    <p className="text-xs" style={mutedStyle}>{file.fileSize} • Attached</p>
+                    <p className="text-sm font-medium truncate" style={textStyle}>{file.name}</p>
+                    <p className="text-xs" style={mutedStyle}>{file.size} • Attached</p>
                   </div>
                   <button
                     type="button"
@@ -257,46 +252,130 @@ export function UploadDocument() {
             </select>
             {categories.length === 0 && (
               <p className="mt-1 text-xs text-orange-500">
-                No categories found. Please create one in the Activities/Events section first.
+                No categories found. Please create one in the Document Categories screen first.
               </p>
             )}
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-2" style={textStyle}>
-              Send to (Recipients)
+          <div className="space-y-4">
+            <label className="block text-sm font-medium" style={textStyle}>
+              Send to (Initial Recipient)
             </label>
-            <div className="flex gap-2 mb-2">
-              <div className="relative flex-1">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-5" style={mutedStyle} />
-                <input
-                  type="email"
-                  value={recipientEmail}
-                  onChange={(e) => setRecipientEmail(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addRecipient())}
-                  className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs mb-1.5 opacity-70" style={textStyle}>Filter By Department</label>
+                <select
+                  value={selectedDeptId}
+                  onChange={(e) => {
+                    setSelectedDeptId(e.target.value);
+                  }}
+                  className="w-full text-sm px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                   style={inputStyle}
-                />
+                >
+                  <option value="">All Departments</option>
+                  {departments.map((dept) => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.name}
+                    </option>
+                  ))}
+                </select>
               </div>
-              <button
-                type="button"
-                onClick={addRecipient}
-                className="px-3 py-2 bg-blue-600/10 text-blue-600 rounded-lg hover:bg-blue-600/20 transition-colors"
-              >
-                <Plus className="size-5" />
-              </button>
+              <div className="relative">
+                <label className="block text-xs mb-1.5 opacity-70" style={textStyle}>Select Recipient</label>
+                <div
+                  className="flex items-center px-4 py-2.5 rounded-xl border focus-within:ring-2 focus-within:ring-blue-500 transition-all"
+                  style={inputStyle}
+                >
+                  <Search className="size-4 mr-2 opacity-50" />
+                  <input
+                    type="text"
+                    placeholder="Search name or email..."
+                    value={searchTerm}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      setShowResults(true);
+                    }}
+                    onFocus={() => setShowResults(true)}
+                    className="bg-transparent border-none outline-none flex-1 text-sm placeholder:opacity-50"
+                  />
+                  {searchTerm ? (
+                    <button onClick={() => setSearchTerm('')} type="button" className="opacity-50 hover:opacity-100">
+                      <X className="size-4" />
+                    </button>
+                  ) : <ChevronDown className="size-4 opacity-30" />}
+                </div>
+
+                {showResults && (searchTerm || selectedDeptId) && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setShowResults(false)} />
+                    <div className="absolute z-50 w-full mt-2 max-h-60 overflow-y-auto rounded-xl border shadow-2xl bg-white dark:bg-slate-900 animate-in fade-in zoom-in-95 duration-200" style={{ borderColor: 'var(--border)' }}>
+                      {filteredResults.length === 0 ? (
+                        <div className="p-8 text-center" style={mutedStyle}>
+                          <Users className="size-8 mx-auto mb-2 opacity-20" />
+                          <p className="text-sm">No users found</p>
+                        </div>
+                      ) : (
+                        filteredResults.map(u => (
+                          <button
+                            key={u.id}
+                            type="button"
+                            onClick={() => {
+                              addRecipient({
+                                email: u.email,
+                                display_name: u.display_name,
+                                department_id: u.department_id || undefined,
+                                department_name: u.department_name
+                              });
+                              setSearchTerm('');
+                              setShowResults(false);
+                            }}
+                            className="w-full text-left p-3.5 hover:bg-blue-600/10 transition-colors border-b last:border-0 flex items-center gap-3"
+                            style={{ borderColor: 'var(--border)' }}
+                          >
+                            <div className="w-8 h-8 rounded-full bg-blue-600/10 flex items-center justify-center text-blue-600 font-bold text-xs">
+                              {u.display_name?.charAt(0)}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold truncate" style={textStyle}>{u.display_name}</p>
+                              <p className="text-[10px] opacity-60 truncate" style={mutedStyle}>{u.email} • {u.department_name}</p>
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
 
-            {formData.recipients.length > 0 && (
-              <div className="grid-flex gap-2 pt-1">
-                {formData.recipients.map(email => (
-                  <span key={email} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-600 text-xs font-medium border border-blue-500/20">
-                    {email}
-                    <button type="button" onClick={() => removeRecipient(email)} className="hover:text-red-500 transition-colors">
-                      <X className="size-3" />
-                    </button>
-                  </span>
-                ))}
+            {formData.recipients.length > 0 ? (
+              <div className="mt-4 p-4 rounded-xl border bg-[var(--muted)] transition-all animate-in fade-in slide-in-from-top-2 flex items-center justify-between shadow-sm" style={{ borderColor: 'var(--border)' }}>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-600/10 flex items-center justify-center text-blue-600 shadow-inner">
+                    <Mail className="size-5" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider opacity-50 mb-0.5" style={textStyle}>Target Handler</label>
+                    <p className="text-sm font-semibold" style={textStyle}>{formData.recipients[0].name}</p>
+                    <p className="text-xs opacity-60" style={mutedStyle}>
+                      {formData.recipients[0].departmentName} • {formData.recipients[0].email}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeRecipient()}
+                  className="p-2.5 hover:bg-red-500/10 text-red-600 rounded-xl transition-all"
+                  title="Remove Recipient"
+                >
+                  <Trash2 className="size-5" />
+                </button>
+              </div>
+            ) : (
+              <div className="py-8 text-center rounded-xl border-2 border-dashed" style={{ borderColor: 'var(--border)' }}>
+                <Users className="size-8 mx-auto mb-2 opacity-20" style={textStyle} />
+                <p className="text-sm" style={mutedStyle}>No recipient selected. Search above to define the initial route.</p>
               </div>
             )}
           </div>
@@ -309,7 +388,7 @@ export function UploadDocument() {
               type="button"
               onClick={() => {
                 if (confirm('Are you sure you want to discard this draft? This will delete all attached files in this session.')) {
-                  discardDraft(formData.trackingId!);
+                  discardDraft(formData.documentId!);
                 }
               }}
               disabled={isUploading}
@@ -332,22 +411,14 @@ export function UploadDocument() {
           <button
             type="submit"
             disabled={isUploading}
-            className="min-h-[44px] min-w-[140px] px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:bg-blue-800 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation flex items-center justify-center gap-2"
+            className="min-h-[44px] min-w-[140px] px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:bg-blue-800 transition-all font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
           >
-            {isUploading ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                {isSending ? 'Sending...' : 'Uploading...'}
-              </>
-            ) : (
-              <>
-                <Send className="size-4" />
-                Upload & Send
-              </>
-            )}
+            <Send className="size-4" />
+            Upload & Send
           </button>
         </div>
       </form>
+      <FullScreenLoader isOpen={isUploading} message={isSending ? 'Sending to recipients...' : 'Uploading secure document...'} />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { ShieldHalf, Phone } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../contexts/AppContext';
+import { UserAvatar } from './ui/UserAvatar';
 
 export function OnboardingLayout() {
     const navigate = useNavigate();
@@ -56,9 +57,7 @@ export function OnboardingLayout() {
         <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
             <div className="max-w-md w-full p-8 rounded-2xl shadow-xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 transition-all duration-300">
                 <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 mb-4">
-                        <span className="text-2xl font-bold">{user?.initials || '👋'}</span>
-                    </div>
+                    <UserAvatar size="lg" />
                     <h2 className="text-2xl font-bold mb-2" style={textStyle}>
                         Welcome, {user?.name?.split(' ')[0] || 'User'}!
                     </h2>

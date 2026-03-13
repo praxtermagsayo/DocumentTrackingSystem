@@ -20,7 +20,7 @@ import {
 
 export function Dashboard() {
   const location = useLocation();
-  const { documents, searchQuery, setSearchQuery, resolvedTheme } = useApp();
+  const { documents, searchQuery, setSearchQuery, resolvedTheme, currentUserId } = useApp();
   const [searchTerm, setSearchTerm] = useState(searchQuery);
   const [recentActivity, setRecentActivity] = useState<documentService.RecentActivityItem[]>([]);
   const [activityLoading, setActivityLoading] = useState(true);
@@ -28,26 +28,45 @@ export function Dashboard() {
   const searchFiltered = documents.filter((d) => documentMatchesSearch(d, searchTerm || searchQuery));
 
   const stats = {
-    draft: documents.filter((d) => d.status === 'draft').length,
-    underReview: documents.filter((d) => d.status === 'under-review').length,
-    approved: documents.filter((d) => d.status === 'approved').length,
-    rejected: documents.filter((d) => d.status === 'rejected').length,
-    archived: documents.filter((d) => d.status === 'archived').length,
+    forwarded: documents.filter((d) => d.status === 'forwarded').length,
+    viewed: documents.filter((d) => d.status === 'viewed').length,
+    acknowledged: documents.filter((d) => d.status === 'acknowledged').length,
   };
 
-  const myTasks = searchFiltered
-    .filter((d) => d.status === 'under-review' || d.status === 'rejected')
-    .slice(0, 6);
+  const pending = documents
+    .filter((d) => d.status === 'forwarded' && d.ownerId !== currentUserId)
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+
+  const myTasks = Array.from(
+    new Map(
+      pending.map((d) => [d.id, d])
+    ).values()
+  ).slice(0, 6);
 
   useEffect(() => {
     documentService.fetchRecentActivity(5).then(setRecentActivity).finally(() => setActivityLoading(false));
   }, [documents.length]);
 
   const getStageColor = (status: string) => {
-    if (status === 'approved') return 'bg-green-500/20 text-green-700 dark:text-green-400';
-    if (status === 'under-review') return 'bg-blue-500/20 text-blue-700 dark:text-blue-400';
-    if (status === 'rejected') return 'bg-orange-500/20 text-orange-700 dark:text-orange-400';
+    if (status === 'acknowledged' || status === 'approved' || status === 'completed') return 'status-acknowledged';
+    if (status === 'viewed') return 'status-viewed';
+    if (status === 'forwarded') return 'status-sent';
+    if (status === 'rejected' || status === 'returned') return 'bg-red-500/20 text-red-700 dark:text-red-400';
     return 'bg-slate-500/20 text-slate-700 dark:text-slate-400';
+  };
+
+  const getAgeingColor = (updatedAt: string) => {
+    const days = Math.floor((Date.now() - new Date(updatedAt).getTime()) / (24 * 60 * 60 * 1000));
+    if (days < 3) return 'bg-green-500/20 text-green-700 dark:text-green-400';
+    if (days <= 7) return 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400';
+    return 'bg-red-500/20 text-red-700 dark:text-red-400';
+  };
+
+  const getAgeingLabel = (updatedAt: string) => {
+    const days = Math.floor((Date.now() - new Date(updatedAt).getTime()) / (24 * 60 * 60 * 1000));
+    if (days === 0) return 'Today';
+    if (days === 1) return 'Yesterday';
+    return `${days} days`;
   };
 
   const isDark = resolvedTheme === 'dark';
@@ -73,28 +92,22 @@ export function Dashboard() {
 
   const ageingData = [
     {
-      name: 'Overdue', value: documents.filter((d) => {
+      name: '< 3 days', value: documents.filter((d) => {
         const days = Math.floor((Date.now() - new Date(d.updatedAt).getTime()) / (24 * 60 * 60 * 1000));
-        return days < 0;
-      }).length, fill: '#f97316'
-    },
-    {
-      name: '0-7 days', value: documents.filter((d) => {
-        const days = Math.floor((Date.now() - new Date(d.updatedAt).getTime()) / (24 * 60 * 60 * 1000));
-        return days >= 0 && days <= 7;
-      }).length, fill: '#8b5cf6'
-    },
-    {
-      name: '8-14 days', value: documents.filter((d) => {
-        const days = Math.floor((Date.now() - new Date(d.updatedAt).getTime()) / (24 * 60 * 60 * 1000));
-        return days > 7 && days <= 14;
-      }).length, fill: '#3b82f6'
-    },
-    {
-      name: '15+ days', value: documents.filter((d) => {
-        const days = Math.floor((Date.now() - new Date(d.updatedAt).getTime()) / (24 * 60 * 60 * 1000));
-        return days > 14;
+        return days < 3;
       }).length, fill: '#10b981'
+    },
+    {
+      name: '3-7 days', value: documents.filter((d) => {
+        const days = Math.floor((Date.now() - new Date(d.updatedAt).getTime()) / (24 * 60 * 60 * 1000));
+        return days >= 3 && days <= 7;
+      }).length, fill: '#f59e0b'
+    },
+    {
+      name: '7+ days', value: documents.filter((d) => {
+        const days = Math.floor((Date.now() - new Date(d.updatedAt).getTime()) / (24 * 60 * 60 * 1000));
+        return days > 7;
+      }).length, fill: '#ef4444'
     },
   ];
 
@@ -107,25 +120,17 @@ export function Dashboard() {
 
       {/* Status Cards - 5 in one row (flex ensures layout regardless of Tailwind) */}
       <div style={{ display: 'flex', flexDirection: 'row', gap: '1rem', flexWrap: 'nowrap' }}>
-        <div className="rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow animate-elastic-pop" style={{ backgroundColor: '#f97316', color: '#fff', flex: 1, minWidth: 0, animationDelay: '0s' }}>
-          <div className="text-sm font-medium mb-2">Draft</div>
-          <div className="text-4xl font-bold">{stats.draft}</div>
+        <div className="rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow animate-elastic-pop" style={{ backgroundColor: '#3b82f6', color: '#fff', flex: 1, minWidth: 0, animationDelay: '0s' }}>
+          <div className="text-sm font-medium mb-2">Forwarded</div>
+          <div className="text-4xl font-bold">{stats.forwarded}</div>
         </div>
-        <div className="rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow animate-elastic-pop" style={{ backgroundColor: '#3b82f6', color: '#fff', flex: 1, minWidth: 0, animationDelay: '0.05s' }}>
-          <div className="text-sm font-medium mb-2">For Review</div>
-          <div className="text-4xl font-bold">{stats.underReview}</div>
+        <div className="rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow animate-elastic-pop" style={{ backgroundColor: '#f59e0b', color: '#fff', flex: 1, minWidth: 0, animationDelay: '0.05s' }}>
+          <div className="text-sm font-medium mb-2">Viewed</div>
+          <div className="text-4xl font-bold">{stats.viewed}</div>
         </div>
-        <div className="rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow animate-elastic-pop" style={{ backgroundColor: '#22c55e', color: '#fff', flex: 1, minWidth: 0, animationDelay: '0.1s' }}>
-          <div className="text-sm font-medium mb-2">Approval</div>
-          <div className="text-4xl font-bold">{stats.approved}</div>
-        </div>
-        <div className="rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow animate-elastic-pop" style={{ backgroundColor: '#9333ea', color: '#fff', flex: 1, minWidth: 0, animationDelay: '0.15s' }}>
-          <div className="text-sm font-medium mb-2">Rejected</div>
-          <div className="text-4xl font-bold">{stats.rejected}</div>
-        </div>
-        <div className="rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow animate-elastic-pop" style={{ backgroundColor: '#94a3b8', color: '#fff', flex: 1, minWidth: 0, animationDelay: '0.2s' }}>
-          <div className="text-sm font-medium mb-2">Archived</div>
-          <div className="text-4xl font-bold">{stats.archived}</div>
+        <div className="rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow animate-elastic-pop" style={{ backgroundColor: '#14b8a6', color: '#fff', flex: 1, minWidth: 0, animationDelay: '0.1s' }}>
+          <div className="text-sm font-medium mb-2">Acknowledged</div>
+          <div className="text-4xl font-bold">{stats.acknowledged}</div>
         </div>
       </div>
 
@@ -207,7 +212,7 @@ export function Dashboard() {
                   ) : (
                     myTasks.map((doc) => (
                       <tr key={doc.id} className="hover:bg-accent/50 transition-colors">
-                        <td className="px-6 py-4 text-sm text-muted-foreground">{doc.trackingId}</td>
+                        <td className="px-6 py-4 text-sm text-muted-foreground">#{doc.id.split('-')[0].toUpperCase()}</td>
                         <td className="px-6 py-4 text-sm text-foreground font-medium">
                           <Link to={`/documents/${doc.id}`} state={{ from: location.pathname }} className="hover:text-blue-600 dark:hover:text-blue-400">
                             {doc.title}
@@ -215,13 +220,18 @@ export function Dashboard() {
                         </td>
                         <td className="px-6 py-4">
                           <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium ${getStageColor(doc.status)}`}>
-                            {doc.status === 'approved' ? 'Approval' : doc.status === 'under-review' ? 'Review' : doc.status === 'rejected' ? 'Review again' : doc.status}
+                            {doc.status === 'acknowledged' ? 'Acknowledged' : doc.status === 'viewed' ? 'Viewed' : 'Forwarded'}
                           </span>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                            <Clock className="size-3" />
-                            {formatRelativeTime(doc.updatedAt)}
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${getAgeingColor(doc.updatedAt)}`}>
+                              {getAgeingLabel(doc.updatedAt)}
+                            </span>
+                            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                              <Clock className="size-3" />
+                              {formatRelativeTime(doc.updatedAt)}
+                            </div>
                           </div>
                         </td>
                       </tr>

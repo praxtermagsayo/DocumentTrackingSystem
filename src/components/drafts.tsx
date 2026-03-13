@@ -14,32 +14,17 @@ export function Drafts() {
     .filter((d) => d.status === 'draft')
     .filter((d) => documentMatchesSearch(d, searchQuery));
 
-  const groupedDrafts = useMemo(() => {
-    const groups: Record<string, any> = {};
-    draftDocuments.forEach(doc => {
-      const tid = doc.trackingId;
-      if (!groups[tid]) {
-        groups[tid] = { ...doc, files: [doc] };
-      } else {
-        groups[tid].files.push(doc);
-        if (new Date(doc.updatedAt) > new Date(groups[tid].updatedAt)) {
-          groups[tid].updatedAt = doc.updatedAt;
-        }
-      }
-    });
-    return Object.values(groups).sort((a: any, b: any) =>
+  const sortedDrafts = useMemo(() => {
+    return [...draftDocuments].sort((a, b) =>
       new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
   }, [draftDocuments]);
 
-  const handleDeleteDraft = async (trackingId: string) => {
+  const handleDeleteDraft = async (documentId: string) => {
     if (!confirm('Are you sure you want to delete this draft and all its attachments?')) return;
-    setIsDeleting(trackingId);
+    setIsDeleting(documentId);
     try {
-      const batch = await documentService.fetchDocumentsByTrackingId(trackingId);
-      for (const doc of batch) {
-        await documentService.deleteDocument(doc.id);
-      }
+      await documentService.deleteDocument(documentId);
       await refreshDocuments();
     } catch (err) {
       console.error('Failed to delete draft', err);
@@ -97,7 +82,7 @@ export function Drafts() {
         <div className="px-6 py-4 border-b" style={{ borderColor: 'var(--border)' }}>
           <div className="flex items-center justify-between">
             <p className="text-sm" style={mutedStyle}>
-              You have <span className="font-medium" style={textStyle}>{groupedDrafts.length}</span> draft sessions
+              You have <span className="font-medium" style={textStyle}>{sortedDrafts.length}</span> draft sessions
             </p>
             <Link
               to="/upload"
@@ -112,7 +97,7 @@ export function Drafts() {
           <table className="w-full">
             <thead className="border-b" style={mutedBgStyle}>
               <tr>
-                {['Document Name', 'Category', 'Tracking ID', 'Last Modified', 'Actions'].map((label) => (
+                {['Document Name', 'Category', 'Document ID', 'Last Modified', 'Actions'].map((label) => (
                   <th key={label} className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={mutedStyle}>
                     {label}
                   </th>
@@ -120,19 +105,19 @@ export function Drafts() {
               </tr>
             </thead>
             <tbody className="divide-y" style={{ borderColor: 'var(--border)' }}>
-              {groupedDrafts.map((doc: any) => (
-                <tr key={doc.trackingId} className="transition-colors hover:opacity-90" style={{ backgroundColor: 'var(--card)' }}>
+              {sortedDrafts.map((doc: any) => (
+                <tr key={doc.id} className="transition-colors hover:opacity-90" style={{ backgroundColor: 'var(--card)' }}>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className={`p-2 ${doc.files.length > 1 ? 'bg-blue-600/10' : getFileIconBg(doc.fileType)} rounded-lg relative`}>
-                        {doc.files.length > 1 ? (
+                      <div className={`p-2 ${doc.files?.length > 1 ? 'bg-blue-600/10' : getFileIconBg(doc.files?.[0]?.type || '')} rounded-lg relative`}>
+                        {doc.files?.length > 1 ? (
                           <div className="relative">
                             <FileText className="size-5 text-blue-600" />
                             <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] size-4 rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900">
                               {doc.files.length}
                             </span>
                           </div>
-                        ) : getFileIcon(doc.fileType)}
+                        ) : getFileIcon(doc.files?.[0]?.type || '')}
                       </div>
                       <div className="min-w-0 text-left">
                         <Link
@@ -143,15 +128,17 @@ export function Drafts() {
                           title={doc.title}
                         >
                           {doc.title}
-                          {doc.files.length > 1 && <span className="ml-2 text-xs font-normal opacity-60">({doc.files.length} files)</span>}
+                          {doc.files?.length > 1 && <span className="ml-2 text-xs font-normal opacity-60">({doc.files.length} files)</span>}
                         </Link>
                         <div className="mt-1 flex flex-wrap items-center gap-1.5 justify-start">
                           <DocumentSourceBadge document={doc} currentUserId={currentUserId} />
                         </div>
                         <p className="text-xs m-0 mt-0.5 text-left" style={mutedStyle}>
-                          {doc.files.length > 1
-                            ? `${doc.files.map((f: any) => f.fileType).join(', ')}`
-                            : `${doc.fileType} • ${doc.fileSize}`}
+                          {doc.files?.length > 1
+                            ? (doc.files.length > 3
+                              ? `${doc.files.slice(0, 3).map((f: any) => f.type).join(', ')} (+${doc.files.length - 3} more)`
+                              : `${doc.files.map((f: any) => f.type).join(', ')}`)
+                            : `${doc.files?.[0]?.type || 'Unknown'} • ${doc.files?.[0]?.size || '0 B'}`}
                         </p>
                       </div>
                     </div>
@@ -162,7 +149,7 @@ export function Drafts() {
                     </span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-sm font-mono" style={mutedStyle}>{doc.trackingId}</span>
+                    <span className="text-sm font-mono" style={mutedStyle}>#{doc.id.split('-')[0].toUpperCase()}</span>
                   </td>
                   <td className="px-6 py-4">
                     <span className="text-sm" style={mutedStyle}>{formatDate(doc.updatedAt)}</span>
@@ -176,11 +163,11 @@ export function Drafts() {
                         <Edit className="size-4" />
                       </Link>
                       <button
-                        onClick={() => handleDeleteDraft(doc.trackingId)}
-                        disabled={isDeleting === doc.trackingId}
+                        onClick={() => handleDeleteDraft(doc.id)}
+                        disabled={isDeleting === doc.id}
                         className="p-1.5 text-red-600 dark:text-red-400 hover:opacity-80 rounded transition-colors disabled:opacity-50"
                       >
-                        {isDeleting === doc.trackingId ? (
+                        {isDeleting === doc.id ? (
                           <div className="size-4 border-2 border-red-600/30 border-t-red-600 rounded-full animate-spin" />
                         ) : (
                           <Trash2 className="size-4" />

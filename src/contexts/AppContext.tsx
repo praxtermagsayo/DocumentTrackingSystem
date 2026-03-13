@@ -5,6 +5,7 @@ import * as themeLib from '../lib/theme';
 import type { User } from '@supabase/supabase-js';
 import * as documentService from '../services/documents';
 import * as notificationService from '../services/notifications';
+import * as profileService from '../services/profile';
 
 export interface Notification {
   id: string;
@@ -19,6 +20,7 @@ export interface Notification {
 
 export interface AppContextType {
   // Authentication
+  isAuthLoading: boolean;
   isAuthenticated: boolean;
   needsOnboarding: boolean;
   login: (email: string, password: string) => Promise<void>;
@@ -30,12 +32,19 @@ export interface AppContextType {
     email: string;
     role: string;
     initials: string;
+    /** URL of the user's uploaded avatar, or null if using initials */
+    avatarUrl: string | null;
+    departmentId?: string | null;
+    departmentName?: string | null;
+    departmentCode?: string | null;
   } | null;
+  /** Re-fetches avatar_url from the profiles table and updates user state globally */
+  refreshAvatar: () => Promise<void>;
 
   // Documents (from database)
   documents: Document[];
   refreshDocuments: () => Promise<void>;
-  updateDocumentStatus: (docId: string, status: DocumentStatus, comment: string) => Promise<void>;
+  updateDocumentStatus: (docId: string, status: DocumentStatus, comment: string, updatedBy?: string) => Promise<void>;
   deleteDocument: (docId: string) => Promise<void>;
   addComment: (docId: string, comment: string) => Promise<void>;
   /** Current user's id (for ownership checks). */
@@ -62,6 +71,7 @@ export interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [user, setUser] = useState<AppContextType['user']>(null);
@@ -92,14 +102,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const upsertProfile = async (u: User) => {
     const name = (u.user_metadata?.full_name as string) || u.email?.split('@')[0] || '';
     await supabase.from('profiles').upsert(
-      { id: u.id, email: u.email ?? null, display_name: name || null },
+      {
+        id: u.id,
+        email: u.email ?? null,
+        display_name: name || null,
+        department_id: u.user_metadata?.department_id || null
+      },
       { onConflict: 'id' }
     );
   };
 
 
 
-  // Map Supabase User to app user
+  // Map Supabase User to app user (avatarUrl starts null, loaded separately)
   const mapSupabaseUser = (u: User | null): AppContextType['user'] => {
     if (!u?.email) return null;
     const name = (u.user_metadata?.full_name as string) || u.email.split('@')[0] || 'User';
@@ -109,8 +124,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .join('')
       .toUpperCase()
       .slice(0, 2);
-    return { name, email: u.email, initials, role: u.user_metadata?.role || 'user' };
+    return {
+      name,
+      email: u.email,
+      initials,
+      role: u.user_metadata?.role || 'user',
+      avatarUrl: null,
+      departmentId: null,
+      departmentName: null,
+      departmentCode: null
+    };
   };
+
+  /** Fetch full profile from the profiles table and sync with state. */
+  const refreshProfileData = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user?.id) return;
+    const profile = await profileService.fetchProfile(session.user.id);
+    setUser((prev) => prev ? {
+      ...prev,
+      avatarUrl: profile?.avatar_url ?? null,
+      departmentId: profile?.department_id ?? null,
+      departmentName: profile?.departments?.name ?? null,
+      departmentCode: profile?.departments?.code ?? null
+    } : prev);
+  }, []);
+
+  const refreshAvatar = refreshProfileData;
 
   // Apply theme on mount and when theme changes
   useEffect(() => {
@@ -158,6 +198,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setCurrentUserId(session.user.id);
         upsertProfile(session.user);
       }
+      setIsAuthLoading(false);
     });
 
     const {
@@ -177,6 +218,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setDocuments([]);
         setNotifications([]);
       }
+      setIsAuthLoading(false);
     });
 
     return () => subscription.unsubscribe();
@@ -187,9 +229,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const run = async () => {
       await refreshDocuments();
       await refreshNotifications();
+      await refreshAvatar();
     };
     run();
-  }, [user, refreshDocuments, refreshNotifications]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.email, refreshDocuments, refreshNotifications, refreshAvatar]);
 
   const login = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -218,18 +262,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
-  const updateDocumentStatus = async (docId: string, status: DocumentStatus, comment: string) => {
+  const updateDocumentStatus = async (docId: string, status: DocumentStatus, comment: string, updatedBy?: string) => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user?.id) return;
     const doc = documents.find((d) => d.id === docId);
-    const ownerName = user?.name || session.user.email || 'User';
-    await documentService.updateDocumentStatus(docId, status, comment, ownerName);
+    const updater = updatedBy || user?.email || user?.name || session.user.email || 'User';
+    await documentService.updateDocumentStatus(docId, status, comment, updater);
     await refreshDocuments();
     if (doc) {
       await notificationService.createNotification({
         userId: session.user.id,
         title: 'Status Updated',
-        message: `${doc.title} status changed to ${status}`,
+        message: `"${doc.title}" status changed to "${status}"`,
         type: 'success',
         link: `/documents/${docId}`,
       });
@@ -247,7 +291,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!session?.user?.id) return;
     const doc = documents.find((d) => d.id === docId);
     const ownerName = user?.name || session.user.email || 'User';
-    await documentService.addDocumentHistory(docId, doc?.status ?? 'draft', comment, ownerName);
+    await documentService.addDocumentHistory(docId, doc?.status ?? 'forwarded', comment, ownerName);
     if (doc) {
       await notificationService.createNotification({
         userId: session.user.id,
@@ -283,6 +327,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   return (
     <AppContext.Provider
       value={{
+        isAuthLoading,
         isAuthenticated,
         needsOnboarding,
         login,
@@ -305,6 +350,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         theme,
         setTheme,
         resolvedTheme,
+        refreshAvatar,
       }}
     >
       {children}

@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import type { Document, DocumentStatus } from '../types';
+import type { Document, DocumentStatus, DocumentAcknowledgement } from '../types';
 
 const TRACKING_PREFIX = '#TRK';
 const BUCKET = 'documents';
@@ -11,10 +11,6 @@ export interface DocumentRow {
   description: string | null;
   status: string;
   category: string;
-  file_type: string;
-  file_size: string;
-  tracking_id: string;
-  file_path: string | null;
   owner_name: string;
   created_at: string;
   updated_at: string;
@@ -22,7 +18,8 @@ export interface DocumentRow {
   team_id?: string | null;
   assigned_to?: string | null;
   assigned_to_name?: string | null;
-  original_filename?: string | null;
+  files?: any[] | null;
+  document_routing?: any[] | null;
 }
 
 function rowToDocument(row: DocumentRow): Document {
@@ -35,22 +32,19 @@ function rowToDocument(row: DocumentRow): Document {
     createdBy: row.owner_name,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    fileType: row.file_type,
-    fileSize: row.file_size,
-    trackingId: row.tracking_id,
+    files: Array.isArray(row.files) ? row.files : [],
     recipients: row.recipients || [],
     ownerName: row.owner_name,
     ownerId: row.user_id,
-    filePath: row.file_path || undefined,
-    originalFilename: row.original_filename || undefined,
+    routingSteps: Array.isArray(row.document_routing) ? row.document_routing : [],
   };
 }
 
 export async function fetchDocuments(userId: string, userEmail: string): Promise<Document[]> {
   const { data, error } = await supabase
     .from('documents')
-    .select('*')
-    .or(`user_id.eq.${userId},recipients.cs.{${userEmail}}`)
+    .select('*, document_routing(*)')
+    .or(`user_id.eq.${userId},recipients.cs.{${userEmail}},document_routing.receiver_user_id.eq.${userId}`)
     .order('updated_at', { ascending: false });
 
   if (error) throw error;
@@ -72,58 +66,67 @@ function formatFileSizeDisplay(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
-export async function createDocument(params: {
+export interface RoutingStepInput {
+  email: string;
+  name: string;
+  departmentId?: string;
+  departmentName?: string;
+}
+
+// We remove createDocument and fold its logic directly below
+export async function createDocuments(params: {
   userId: string;
   ownerName: string;
+  ownerEmail?: string;
   title: string;
   description: string;
   category: string;
   status: DocumentStatus;
   recipients?: string[];
-  file?: File;
-  trackingId?: string;
-  originalFilename?: string;
+  routingSteps?: RoutingStepInput[];
+  files: File[];
 }): Promise<Document> {
-  const { userId, ownerName, title, description, category, status, recipients, file, trackingId: providedTrackingId, originalFilename } = params;
-
-  const year = new Date().getFullYear();
-  let trackingId = providedTrackingId;
-
-  if (!trackingId) {
-    const { count } = await supabase
-      .from('documents')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .gte('created_at', `${year}-01-01`);
-    const seq = (count ?? 0) + 1;
-    trackingId = `${TRACKING_PREFIX}-${year}-${String(seq).padStart(3, '0')}`;
-  }
-
+  const { files, userId, ownerName, ownerEmail, title, description, category, status, recipients, routingSteps } = params;
   const docId = crypto.randomUUID();
-  let file_path: string | null = null;
-  let file_type = '';
-  let file_size = '';
 
-  if (file) {
+  // 1. Build the files JSON array and upload each
+  const uploadedFiles = [];
+
+  for (const file of files) {
+    const fileId = crypto.randomUUID();
     const ext = file.name.split('.').pop() || 'bin';
-    file_type = ext.toUpperCase();
-    file_size = formatFileSizeDisplay(file.size);
+    const file_path = `${userId}/${docId}/${fileId}.${ext}`;
+    const file_type = ext.toUpperCase();
+    const file_size = formatFileSizeDisplay(file.size);
+
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET)
+      .upload(file_path, file, { upsert: false });
+
+    if (uploadError) {
+      throw new Error(`Failed to upload file ${file.name}: ${uploadError.message}`);
+    }
+
+    uploadedFiles.push({
+      id: fileId,
+      name: file.name,
+      path: file_path,
+      size: file_size,
+      type: file_type,
+    });
   }
 
-  const insertPayload: Record<string, unknown> = {
+  // 2. Insert the single document row
+  const insertPayload = {
     id: docId,
     user_id: userId,
     title,
     description: description || '',
     category: category || 'Other',
     status,
-    tracking_id: trackingId,
     recipients: recipients || [],
-    file_path,
-    file_type,
-    file_size,
+    files: uploadedFiles,
     owner_name: ownerName,
-    original_filename: originalFilename || (file ? file.name : null),
   };
 
   const { data: row, error: insertError } = await supabase
@@ -133,113 +136,56 @@ export async function createDocument(params: {
     .single();
 
   if (insertError) {
-    const msg = insertError.message || String(insertError);
-    throw new Error(`Could not create document: ${msg}`);
+    throw new Error(`Could not create document: ${insertError.message}`);
   }
 
-  // 2. Record initial status in history
-  const { error: historyError } = await supabase.from('document_history').insert({
+  // 3. Create Routing Steps if provided
+  if (routingSteps && routingSteps.length > 0) {
+    // We need to find the user IDs for these emails
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, email, department_id')
+      .in('email', routingSteps.map(s => s.email));
+
+    const routingPayload = routingSteps.map((step, index) => {
+      const profile = profiles?.find(p => p.email === step.email);
+      return {
+        document_id: docId,
+        step_number: index + 1,
+        sender_user_id: userId,
+        receiver_user_id: profile?.id,
+        receiver_department_id: profile?.department_id || step.departmentId,
+        status: index === 0 ? 'pending' : 'pending', // All start pending in routing
+        comment: index === 0 ? 'Initial routing step' : null
+      };
+    });
+
+    const { error: routingError } = await supabase
+      .from('document_routing')
+      .insert(routingPayload);
+
+    if (routingError) console.error('Failed to create routing steps:', routingError);
+  }
+
+  // 4. Record in Unified Audit Trail
+  const { error: auditError } = await supabase.from('document_audit_trail').insert({
+    document_id: docId,
+    action_by: userId,
+    action_type: 'created',
+    comment: `Document created and forwarded by ${ownerName}`,
+  });
+
+  if (auditError) console.error('Failed to record audit trail:', auditError);
+
+  // 5. Record in legacy history for backward compatibility
+  await supabase.from('document_history').insert({
     document_id: docId,
     status,
-    comment: 'Document created',
-    updated_by: ownerName,
+    comment: `Document created by ${ownerName}`,
+    updated_by: ownerEmail || ownerName,
   });
-  if (historyError) {
-    const msg = historyError.message || String(historyError);
-    throw new Error(`Document created but history failed: ${msg}`);
-  }
-
-  // 3. Upload file to storage if provided
-  if (file) {
-    const ext = file.name.split('.').pop() || 'bin';
-    const safeName = `${docId}.${ext}`;
-    file_path = `${userId}/${docId}/${safeName}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from(BUCKET)
-      .upload(file_path, file, { upsert: false });
-
-    if (uploadError) {
-      const msg = uploadError.message || String(uploadError);
-      // Update row to keep document without file path so document still exists
-      await supabase
-        .from('documents')
-        .update({ file_path: null, file_type: '', file_size: '' })
-        .eq('id', docId);
-      throw new Error(
-        `Document was saved but the file could not be uploaded. ${msg} ` +
-        'Check that the Storage bucket "documents" exists in Supabase and that RLS allows uploads.'
-      );
-    }
-
-    // Update document with file path and size, then re-fetch so we return correct data
-    const { error: updateError } = await supabase
-      .from('documents')
-      .update({
-        file_path,
-        file_type,
-        file_size,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', docId);
-    if (updateError) {
-      const msg = updateError.message || String(updateError);
-      throw new Error(`File uploaded but updating document failed: ${msg}`);
-    }
-    // Return document with file info
-    return rowToDocument({
-      ...(row as DocumentRow),
-      file_path,
-      file_type,
-      file_size,
-    });
-  }
 
   return rowToDocument(row as DocumentRow);
-}
-
-export async function fetchDocumentsByTrackingId(trackingId: string): Promise<Document[]> {
-  const { data, error } = await supabase
-    .from('documents')
-    .select('*')
-    .eq('tracking_id', trackingId);
-
-  if (error) throw error;
-  return (data || []).map((row) => rowToDocument(row as DocumentRow));
-}
-
-export async function createDocuments(params: {
-  userId: string;
-  ownerName: string;
-  title: string;
-  description: string;
-  category: string;
-  status: DocumentStatus;
-  recipients?: string[];
-  files: File[];
-  trackingId?: string;
-}): Promise<Document[]> {
-  const { files, userId, trackingId: providedTrackingId, ...rest } = params;
-
-  // Generate ONE trackingId for the whole batch if not provided
-  let trackingId = providedTrackingId;
-  if (!trackingId) {
-    const year = new Date().getFullYear();
-    const { count } = await supabase
-      .from('documents')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .gte('created_at', `${year}-01-01`);
-    const seq = (count ?? 0) + 1;
-    trackingId = `${TRACKING_PREFIX}-${year}-${String(seq).padStart(3, '0')}`;
-  }
-
-  const results: Document[] = [];
-  for (const file of files) {
-    const doc = await createDocument({ ...rest, userId, file, trackingId, originalFilename: file.name });
-    results.push(doc);
-  }
-  return results;
 }
 
 export async function updateDocumentStatus(
@@ -262,17 +208,143 @@ export async function updateDocumentStatus(
   });
 }
 
+export async function updateDocumentBatchStatus(
+  trackingId: string,
+  status: DocumentStatus,
+  comment: string,
+  updatedBy: string
+): Promise<void> {
+  const { error: updateErr } = await supabase
+    .from('documents')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('tracking_id', trackingId);
+
+  if (updateErr) throw updateErr;
+
+  // Add a history item for each document in the batch
+  const { data: docs } = await supabase
+    .from('documents')
+    .select('id')
+    .eq('tracking_id', trackingId);
+
+  if (docs && docs.length > 0) {
+    const historyEntries = docs.map(d => ({
+      document_id: d.id,
+      status,
+      comment: comment || 'Batch status updated',
+      updated_by: updatedBy,
+    }));
+    await supabase.from('document_history').insert(historyEntries);
+  }
+}
+
 export async function deleteDocument(documentId: string): Promise<void> {
   const { data: doc } = await supabase
     .from('documents')
-    .select('file_path')
+    .select('files')
     .eq('id', documentId)
     .single();
-  if (doc?.file_path) {
-    await supabase.storage.from(BUCKET).remove([doc.file_path]);
+
+  if (doc?.files && Array.isArray(doc.files)) {
+    const paths = doc.files.map((f: any) => f.path).filter(Boolean);
+    if (paths.length > 0) {
+      await supabase.storage.from(BUCKET).remove(paths);
+    }
   }
+
   const { error } = await supabase.from('documents').delete().eq('id', documentId);
   if (error) throw error;
+}
+
+/**
+ * Update the recipients (shared emails) for every document in a tracking batch.
+ * This replaces the old "share with permission" flow.
+ */
+export async function updateDocumentRecipients(
+  documentId: string,
+  recipients: string[]
+): Promise<void> {
+  const { error } = await supabase
+    .from('documents')
+    .update({ recipients, updated_at: new Date().toISOString() })
+    .eq('id', documentId);
+  if (error) throw error;
+}
+
+/**
+ * Record a "viewed" event in document_history when a recipient opens a document.
+ *
+ * Rules:
+ *  - Lifetime deduplication: only one history entry per (document_id, viewer_name) ever.
+ *  - Updates the status of ALL files in the same batch (same tracking_id) from 'sent' → 'viewed'.
+ *  - Sends a notification to the document owner (once, on first view).
+ *  - Returns true if a new view was recorded, false if already seen (caller can skip refreshDocuments).
+ */
+export async function recordDocumentView(
+  documentId: string,
+  viewerName: string,
+  viewerUserId: string,
+  viewerEmail?: string
+): Promise<boolean> {
+  // ── 1. Update status Transition ALL files in the batch from 'sent' → 'viewed' ─
+  //       (never downgrade 'acknowledged' back to 'viewed')
+  //       We do this BEFORE the deduplication check to ensure any 'sent' docs
+  //       get updated if a recipient views them, even if they've viewed before.
+  const { data: doc, error: fetchErr } = await supabase
+    .from('documents')
+    .select('user_id, title, status')
+    .eq('id', documentId)
+    .single();
+
+  if (fetchErr || !doc) return false;
+
+  const { error: updateErr } = await supabase
+    .from('documents')
+    .update({ status: 'viewed', updated_at: new Date().toISOString() })
+    .eq('id', documentId)
+    // we only update if it is currently 'sent', so we don't downgrade 'acknowledged'
+    .eq('status', 'sent');
+
+  if (updateErr) {
+    console.error('Error updating document status to viewed:', updateErr);
+  }
+
+  // ── 2. Lifetime history deduplication ─────────────────────────────────────
+  const { data: existing } = await supabase
+    .from('document_history')
+    .select('id')
+    .eq('document_id', documentId)
+    .eq('status', 'viewed')
+    .in('updated_by', viewerEmail ? [viewerName, viewerEmail] : [viewerName])
+    .limit(1);
+
+  // Still return true because we might have just updated the real status from 'sent' to 'viewed'
+  // and the UI needs to know to refresh.
+  if (existing && existing.length > 0) return true;
+
+  // ── 3. Insert history entry ───────────────────────────────────────────────
+  await supabase.from('document_history').insert({
+    document_id: documentId,
+    status: 'viewed',
+    comment: `Viewed by ${viewerName}`,
+    updated_by: viewerEmail || viewerName,
+  });
+
+  // ── 4. We don't need a redundant tracking update since the document is a single row ──
+
+  // ── 5. Notify the document owner ─────────────────────────────────────────
+  if (doc.user_id && doc.user_id !== viewerUserId) {
+    const { createNotification } = await import('./notifications');
+    await createNotification({
+      userId: doc.user_id,
+      title: 'Document Viewed',
+      message: `${viewerName} viewed your document "${doc.title}"`,
+      type: 'info',
+      link: `/documents/${documentId}`,
+    }).catch(() => {/* silent — notification failure must not break view recording */ });
+  }
+
+  return true; // new view was logged
 }
 
 export async function addDocumentHistory(
@@ -331,8 +403,10 @@ export async function fetchRecentActivity(limit = 10): Promise<RecentActivityIte
     .from('document_history')
     .select('id, document_id, status, comment, updated_by, created_at, documents(title)')
     .order('created_at', { ascending: false })
-    .limit(limit);
+    .limit(limit); // No need to over-fetch and group since rows are no longer duplicated per file
+
   if (error) throw error;
+
   const rows = (data || []) as Array<{
     id: string;
     document_id: string;
@@ -342,20 +416,286 @@ export async function fetchRecentActivity(limit = 10): Promise<RecentActivityIte
     created_at: string;
     documents: { title?: string } | null;
   }>;
-  return rows.map((row) => {
-    const doc = row.documents;
-    const title = doc?.title ?? 'Unknown document';
+
+  return rows.map(row => {
     let action = statusToAction(row.status);
     if (row.comment && row.comment !== 'Document created' && row.comment !== 'Status updated') {
       action += `: ${row.comment}`;
     }
+
     return {
       id: row.id,
       documentId: row.document_id,
-      documentTitle: title,
+      documentTitle: row.documents?.title ?? 'Unknown document',
       action,
       updatedBy: row.updated_by,
       timestamp: row.created_at,
     };
+  });
+}
+
+// ─── Document Acknowledgements ────────────────────────────────────────────────
+
+
+/** Fetch acknowledgements for a list of document IDs. */
+export async function fetchAcknowledgements(documentIds: string[]): Promise<DocumentAcknowledgement[]> {
+  if (documentIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from('document_acknowledgements')
+    .select('id, document_id, file_id, acknowledged_by, acknowledged_by_name, acknowledged_at')
+    .in('document_id', documentIds);
+  if (error) throw error;
+  return (data || []).map((row) => ({
+    id: row.id,
+    documentId: row.document_id,
+    fileId: row.file_id,
+    userId: row.acknowledged_by,
+    acknowledgedByName: row.acknowledged_by_name,
+    timestamp: row.acknowledged_at,
+  }));
+}
+
+/** Acknowledge a document (as a whole). Throws if already acknowledged by same user for this session. */
+export async function acknowledgeDocument(
+  documentId: string,
+  userId: string,
+  displayName: string,
+  fileId?: string
+): Promise<DocumentAcknowledgement> {
+  const { data, error } = await supabase
+    .from('document_acknowledgements')
+    .insert({
+      document_id: documentId,
+      file_id: fileId || null,
+      acknowledged_by: userId,
+      acknowledged_by_name: displayName
+    })
+    .select('id, document_id, file_id, acknowledged_by, acknowledged_by_name, acknowledged_at')
+    .single();
+
+  if (error) throw error;
+
+  // Record in Audit Trail
+  await supabase.from('document_audit_trail').insert({
+    document_id: documentId,
+    action_by: userId,
+    action_type: 'acknowledged',
+    comment: 'Document acknowledged'
+  });
+
+  // Record in History
+  await supabase.from('document_history').insert({
+    document_id: documentId,
+    status: 'acknowledged',
+    comment: 'Document acknowledged',
+    updated_by: displayName
+  });
+
+  return {
+    id: data.id,
+    documentId: data.document_id,
+    fileId: data.file_id,
+    userId: data.acknowledged_by,
+    acknowledgedByName: data.acknowledged_by_name,
+    timestamp: data.acknowledged_at,
+  };
+}
+
+// ─── Document Routing & Workflow ──────────────────────────────────────────────
+
+export interface DocumentRoutingStep {
+  id: string;
+  document_id: string;
+  step_number: number;
+  sender_user_id: string;
+  receiver_user_id: string;
+  receiver_department_id: string;
+  status: 'pending' | 'approved' | 'rejected' | 'returned' | 'viewed';
+  comment: string | null;
+  created_at: string;
+  action_at: string | null;
+  receiver_name?: string;
+  receiver_email?: string;
+  receiver_department_name?: string;
+}
+
+export async function fetchDocumentRouting(documentId: string): Promise<DocumentRoutingStep[]> {
+  const { data, error } = await supabase
+    .from('document_routing')
+    .select(`
+      *,
+      receiver:profiles!receiver_user_id(display_name, email),
+      department:departments!receiver_department_id(name)
+    `)
+    .eq('document_id', documentId)
+    .order('step_number', { ascending: true });
+
+  if (error) throw error;
+
+  return (data || []).map(row => ({
+    ...row,
+    receiver_name: row.receiver?.display_name,
+    receiver_email: row.receiver?.email,
+    receiver_department_name: row.department?.name
+  }));
+}
+
+export async function processRoutingAction(
+  documentId: string,
+  stepId: string,
+  action: 'approve' | 'reject' | 'return',
+  userId: string,
+  userName: string,
+  comment?: string
+): Promise<void> {
+  const status = action === 'approve' ? 'approved' : action === 'reject' ? 'rejected' : 'returned';
+  const now = new Date().toISOString();
+
+  // 1. Update the current routing step
+  const { error: stepErr } = await supabase
+    .from('document_routing')
+    .update({
+      status,
+      comment: comment || null,
+      action_at: now
+    })
+    .eq('id', stepId);
+
+  if (stepErr) throw stepErr;
+
+  // 2. Add to Unified Audit Trail
+  const { error: auditErr } = await supabase.from('document_audit_trail').insert({
+    document_id: documentId,
+    action_by: userId,
+    action_type: action,
+    comment: comment || `Document ${action}d by ${userName}`
+  });
+
+  if (auditErr) console.error('Audit trail error:', auditErr);
+
+  // 3. Update main document status based on action
+  let docStatus: DocumentStatus = 'forwarded';
+  if (action === 'reject') docStatus = 'rejected';
+  else if (action === 'return') docStatus = 'returned';
+  else if (action === 'approve') {
+    // Check if there's a next step
+    const { data: nextStep } = await supabase
+      .from('document_routing')
+      .select('id')
+      .eq('document_id', documentId)
+      .gt('step_number', (await supabase.from('document_routing').select('step_number').eq('id', stepId).single()).data?.step_number || 0)
+      .order('step_number', { ascending: true })
+      .limit(1)
+      .single();
+
+    if (!nextStep) {
+      docStatus = 'completed'; // No more steps
+    } else {
+      docStatus = 'approved'; // Intermediate approval
+      // We could mark next step as 'pending' but they are already 'pending' by default
+    }
+  }
+
+  await supabase
+    .from('documents')
+    .update({ status: docStatus, updated_at: now })
+    .eq('id', documentId);
+}
+
+export async function forwardDocument(params: {
+  documentId: string;
+  currentStepId?: string;
+  senderId: string;
+  senderName: string;
+  receiverId: string;
+  receiverEmail: string;
+  receiverName: string;
+  receiverDeptId: string;
+  comment?: string;
+}): Promise<void> {
+  const { documentId, currentStepId, senderId, senderName, receiverId, receiverEmail, receiverName, receiverDeptId, comment } = params;
+  const now = new Date().toISOString();
+
+  // 1. If there's a current step, mark it as approved
+  if (currentStepId) {
+    const { error: stepErr } = await supabase
+      .from('document_routing')
+      .update({
+        status: 'approved',
+        action_at: now,
+        comment: comment || 'Forwarded to next department'
+      })
+      .eq('id', currentStepId);
+    if (stepErr) throw stepErr;
+  }
+
+  // 2. Find the next step number
+  const { data: steps } = await supabase
+    .from('document_routing')
+    .select('step_number')
+    .eq('document_id', documentId)
+    .order('step_number', { ascending: false })
+    .limit(1);
+
+  const nextStepNumber = (steps && steps.length > 0) ? steps[0].step_number + 1 : 1;
+
+  // 3. Insert new routing step
+  const { data: newStep, error: insertErr } = await supabase
+    .from('document_routing')
+    .insert({
+      document_id: documentId,
+      step_number: nextStepNumber,
+      sender_user_id: senderId,
+      receiver_user_id: receiverId,
+      receiver_department_id: receiverDeptId,
+      status: 'pending',
+      comment: null
+    })
+    .select()
+    .single();
+
+  if (insertErr) throw insertErr;
+
+  // 4. Update document's current recipient list (for visibility)
+  const { data: doc } = await supabase
+    .from('documents')
+    .select('recipients')
+    .eq('id', documentId)
+    .single();
+
+  const currentRecipients = doc?.recipients || [];
+  if (!currentRecipients.includes(receiverEmail)) {
+    await supabase
+      .from('documents')
+      .update({
+        recipients: [...currentRecipients, receiverEmail],
+        status: 'forwarded',
+        updated_at: now
+      })
+      .eq('id', documentId);
+  } else {
+    await supabase
+      .from('documents')
+      .update({
+        status: 'forwarded',
+        updated_at: now
+      })
+      .eq('id', documentId);
+  }
+
+  // 5. Audit Trail
+  await supabase.from('document_audit_trail').insert({
+    document_id: documentId,
+    action_by: senderId,
+    action_type: 'forwarded',
+    comment: comment || `Document forwarded to ${receiverName} (${receiverEmail})`
+  });
+
+  // 6. Notify legacy history
+  await supabase.from('document_history').insert({
+    document_id: documentId,
+    status: 'forwarded',
+    comment: comment || `Forwarded to ${receiverName}`,
+    updated_by: senderName
   });
 }

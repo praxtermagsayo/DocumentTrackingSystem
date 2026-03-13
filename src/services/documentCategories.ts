@@ -7,6 +7,7 @@ export interface DocumentCategoryRow {
     status: string;
     created_by: string;
     created_at: string;
+    profiles?: { display_name: string } | null;
 }
 
 function rowToCategory(row: DocumentCategoryRow): DocumentCategory {
@@ -15,6 +16,7 @@ function rowToCategory(row: DocumentCategoryRow): DocumentCategory {
         name: row.name,
         status: row.status as DocumentCategoryStatus,
         createdBy: row.created_by,
+        creatorName: row.profiles?.display_name || 'Unknown User',
         createdAt: row.created_at,
     };
 }
@@ -22,7 +24,7 @@ function rowToCategory(row: DocumentCategoryRow): DocumentCategory {
 export async function fetchDocumentCategories(): Promise<DocumentCategory[]> {
     const { data, error } = await supabase
         .from('document_categories')
-        .select('*')
+        .select('*, profiles(display_name)')
         .order('name');
 
     if (error) throw error;

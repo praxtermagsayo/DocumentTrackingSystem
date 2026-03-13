@@ -25,10 +25,6 @@ export function useLoginForm(login: AppContextType['login'], isAuthenticated: bo
         const from = location.state?.from?.pathname || '/';
         navigate(from, { replace: true });
       } catch (err: unknown) {
-        // Play failure sound
-        const audio = new Audio('/nope.mp3');
-        audio.play().catch(e => console.error('Error playing sound:', e));
-
         const message = err instanceof Error ? err.message : 'Invalid email or password.';
         setError(message);
       } finally {

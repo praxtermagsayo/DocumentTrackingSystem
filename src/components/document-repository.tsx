@@ -1,27 +1,27 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router';
-import { DocumentStatus } from '../types';
+import { DocumentStatus, RoutingStep } from '../types';
 import { Search, FileText, X } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { documentMatchesSearch } from '../lib/search';
 import { DocumentSourceBadge } from './document-source-badge';
-import { getStatusLabel } from '../lib/format';
+import { getStatusLabel, getStatusColor } from '../lib/format';
 import { PageTransition } from './page-transition';
 
-type ViewTab = 'all' | 'inbox' | 'sent' | 'drafts';
-type StatusTab = 'all' | 'pending' | 'signed' | 'rejected';
+type ViewTab = 'all' | 'inbox' | 'sent';
+type StatusTab = 'all' | 'forwarded' | 'viewed' | 'acknowledged';
 
 export function DocumentRepository() {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { documents, searchQuery: globalSearch, setSearchQuery: setGlobalSearch, currentUserId } = useApp();
+  const { documents, searchQuery: globalSearch, setSearchQuery: setGlobalSearch, currentUserId, user } = useApp();
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') ?? '');
   const [viewTab, setViewTab] = useState<ViewTab>(() => (searchParams.get('tab') as ViewTab) || 'all');
   const [statusTab, setStatusTab] = useState<StatusTab>('all');
 
   useEffect(() => {
     const tab = searchParams.get('tab') as ViewTab | null;
-    if (tab && ['all', 'inbox', 'sent', 'drafts'].includes(tab)) {
+    if (tab && ['all', 'inbox', 'sent'].includes(tab)) {
       setViewTab(tab);
     }
   }, [searchParams]);
@@ -49,34 +49,33 @@ export function DocumentRepository() {
     setSearchParams(next, { replace: true });
   };
 
-  let baseDocs = documents.filter((d) => d.status !== 'archived');
-  if (viewTab === 'inbox') baseDocs = baseDocs.filter((d) => d.status === 'under-review');
-  else if (viewTab === 'sent') baseDocs = baseDocs.filter((d) => d.status !== 'draft');
-  else if (viewTab === 'drafts') baseDocs = baseDocs.filter((d) => d.status === 'draft');
+  let baseDocs = documents.filter((d) => documentMatchesSearch(d, searchQuery));
 
-  const searchFiltered = baseDocs.filter((d) => documentMatchesSearch(d, searchQuery));
+  if (viewTab === 'inbox') {
+    baseDocs = baseDocs.filter((d) => {
+      // Inbox: Document where user is in routingSteps (pending) or is a recipient and not owner
+      const isRecipient = d.recipients?.includes(user?.email || '');
+      const isCurrentStepReceiver = d.routingSteps?.some((s: RoutingStep) => s.status === 'pending' && s.receiver_user_id === currentUserId);
+      return (isRecipient || isCurrentStepReceiver) && d.ownerId !== currentUserId;
+    });
+  } else if (viewTab === 'sent') {
+    baseDocs = baseDocs.filter((d) => {
+      // Sent: Document where user is the owner or has been a sender in routing
+      const isOwner = d.ownerId === currentUserId;
+      const hasForwarded = d.routingSteps?.some((s: RoutingStep) => s.sender_user_id === currentUserId);
+      const wasRecipient = d.recipients?.includes(user?.email || ''); // Added: docs user shared can also be in sent if they were once a sender
+      return isOwner || hasForwarded;
+    });
+  }
+
+  const searchFiltered = baseDocs;
   const filteredDocuments = searchFiltered.filter((doc) => {
     if (statusTab === 'all') return true;
-    if (statusTab === 'pending') return doc.status === 'under-review';
-    if (statusTab === 'signed') return doc.status === 'approved';
-    if (statusTab === 'rejected') return doc.status === 'rejected';
-    return true;
+    return doc.status === statusTab;
   });
 
-  const groupedDocuments = useMemo(() => {
-    const groups: Record<string, any> = {};
-    filteredDocuments.forEach(doc => {
-      const tid = doc.trackingId;
-      if (!groups[tid]) {
-        groups[tid] = { ...doc, files: [doc] };
-      } else {
-        groups[tid].files.push(doc);
-        if (new Date(doc.updatedAt) > new Date(groups[tid].updatedAt)) {
-          groups[tid].updatedAt = doc.updatedAt;
-        }
-      }
-    });
-    return Object.values(groups).sort((a: any, b: any) =>
+  const sortedDocuments = useMemo(() => {
+    return [...filteredDocuments].sort((a, b) =>
       new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
   }, [filteredDocuments]);
@@ -111,32 +110,11 @@ export function DocumentRepository() {
   };
 
   const getStatusBadge = (status: DocumentStatus) => {
-    switch (status) {
-      case 'approved':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-green-500/20 text-green-700 dark:text-green-400">
-            Approved
-          </span>
-        );
-      case 'under-review':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-yellow-500/20 text-yellow-700 dark:text-yellow-400">
-            Pending
-          </span>
-        );
-      case 'rejected':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-red-500/20 text-red-700 dark:text-red-400">
-            Rejected
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium opacity-90" style={{ ...mutedBgStyle, ...textStyle }}>
-            {getStatusLabel(status)}
-          </span>
-        );
-    }
+    return (
+      <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium border ${getStatusColor(status)}`}>
+        {getStatusLabel(status)}
+      </span>
+    );
   };
 
   const formatDate = (dateString: string) => {
@@ -149,20 +127,16 @@ export function DocumentRepository() {
     { key: 'all', label: 'All Documents' },
     { key: 'inbox', label: 'Inbox' },
     { key: 'sent', label: 'Sent' },
-    { key: 'drafts', label: 'Drafts' },
   ];
-
-  const showStatusTabs = viewTab !== 'drafts';
 
   return (
     <PageTransition className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold" style={textStyle}>Document Repository</h1>
         <p className="mt-1" style={mutedStyle}>
-          {viewTab === 'all' && 'All your documents'}
-          {viewTab === 'inbox' && 'Documents awaiting your review'}
-          {viewTab === 'sent' && 'Documents you\'ve submitted'}
-          {viewTab === 'drafts' && 'Documents you\'re working on'}
+          {viewTab === 'all' && 'All documents shared with you or uploaded by you'}
+          {viewTab === 'inbox' && 'Documents sent to you for review or action'}
+          {viewTab === 'sent' && 'Documents you have uploaded or forwarded'}
         </p>
       </div>
 
@@ -182,21 +156,19 @@ export function DocumentRepository() {
                 </button>
               ))}
             </div>
-            {showStatusTabs && (
-              <div className="flex items-center gap-2">
-                {(['all', 'pending', 'signed', 'rejected'] as const).map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setStatusTab(tab)}
-                    className={`px-2.5 py-1 text-xs font-medium rounded-md transition-elastic active-elastic-tap ${statusTab === tab ? 'bg-blue-600/20 text-blue-700 dark:text-blue-400 shadow-sm' : 'hover:opacity-90'
-                      }`}
-                    style={statusTab === tab ? undefined : mutedStyle}
-                  >
-                    {tab === 'all' ? 'All' : tab === 'signed' ? 'Signed' : tab === 'pending' ? 'Pending' : 'Rejected'}
-                  </button>
-                ))}
-              </div>
-            )}
+            <div className="flex items-center gap-2">
+              {(['all', 'forwarded', 'viewed', 'acknowledged'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setStatusTab(tab)}
+                  className={`px-2.5 py-1 text-xs font-medium rounded-md transition-elastic active-elastic-tap ${statusTab === tab ? 'bg-blue-600/20 text-blue-700 dark:text-blue-400 shadow-sm' : 'hover:opacity-90'
+                    }`}
+                  style={statusTab === tab ? undefined : mutedStyle}
+                >
+                  {tab === 'all' ? 'All' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                </button>
+              ))}
+            </div>
             <div className="relative w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4" style={mutedStyle} />
               <input
@@ -219,7 +191,7 @@ export function DocumentRepository() {
             </div>
           </div>
           <p className="mt-2 text-sm" style={mutedStyle}>
-            Showing <span className="font-medium" style={textStyle}>{groupedDocuments.length}</span> upload sessions
+            Showing <span className="font-medium" style={textStyle}>{sortedDocuments.length}</span> upload sessions
           </p>
         </div>
 
@@ -227,7 +199,7 @@ export function DocumentRepository() {
           <table className="w-full">
             <thead className="border-b" style={mutedBgStyle}>
               <tr>
-                {['Document Name', 'Category', 'Tracking ID', 'Last Updated', 'Owner', 'Status'].map((label) => (
+                {['Document Name', 'Category', 'Document ID', 'Last Updated', 'Owner', 'Status'].map((label) => (
                   <th key={label} className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={mutedStyle}>
                     {label}
                   </th>
@@ -235,38 +207,40 @@ export function DocumentRepository() {
               </tr>
             </thead>
             <tbody className="divide-y" style={{ borderColor: 'var(--border)' }}>
-              {groupedDocuments.map((doc: any) => (
-                <tr key={doc.trackingId} className="transition-elastic hover:opacity-95 animate-elastic-slide" style={{ backgroundColor: 'var(--card)' }}>
+              {sortedDocuments.map((doc: any) => (
+                <tr key={doc.id} className="transition-elastic hover:opacity-95 animate-elastic-slide" style={{ backgroundColor: 'var(--card)' }}>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-lg ${doc.files.length > 1 ? 'bg-blue-600/10' : getFileIconBg(doc.fileType)} relative`}>
-                        {doc.files.length > 1 ? (
+                      <div className={`p-2 rounded-lg ${doc.files?.length > 1 ? 'bg-blue-600/10' : getFileIconBg(doc.files?.[0]?.type || '')} relative`}>
+                        {doc.files?.length > 1 ? (
                           <div className="relative">
                             <FileText className="size-5 text-blue-600" />
                             <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] size-4 rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900">
-                              {doc.files.length}
+                              {doc.files?.length}
                             </span>
                           </div>
-                        ) : getFileIcon(doc.fileType)}
+                        ) : getFileIcon(doc.files?.[0]?.type || '')}
                       </div>
                       <div className="min-w-0 text-left">
                         <Link
-                          to={doc.status === 'draft' ? `/upload?edit=${doc.id}` : `/documents/${doc.id}`}
+                          to={`/documents/${doc.id}`}
                           state={{ from: location.pathname }}
                           className="text-sm font-medium hover:text-blue-600 dark:hover:text-blue-400 transition-colors block truncate"
                           style={textStyle}
                           title={doc.title}
                         >
                           {doc.title}
-                          {doc.files.length > 1 && <span className="ml-2 text-xs font-normal opacity-60">({doc.files.length} files)</span>}
+                          {doc.files?.length > 1 && <span className="ml-2 text-xs font-normal opacity-60">({doc.files.length} files)</span>}
                         </Link>
                         <div className="mt-1 flex flex-wrap items-center gap-1.5 justify-start">
                           <DocumentSourceBadge document={doc} currentUserId={currentUserId} />
                         </div>
                         <p className="text-xs m-0 mt-0.5 text-left" style={mutedStyle}>
-                          {doc.files.length > 1
-                            ? `${doc.files.map((f: any) => f.fileType).join(', ')}`
-                            : `${doc.fileType} • ${doc.fileSize}`}
+                          {doc.files?.length > 1
+                            ? (doc.files.length > 3
+                              ? `${doc.files.slice(0, 3).map((f: any) => f.type).join(', ')} (+${doc.files.length - 3} more)`
+                              : `${doc.files.map((f: any) => f.type).join(', ')}`)
+                            : `${doc.files?.[0]?.type || 'Unknown'} • ${doc.files?.[0]?.size || '0 B'}`}
                         </p>
                       </div>
                     </div>
@@ -277,7 +251,7 @@ export function DocumentRepository() {
                     </span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-sm font-mono" style={mutedStyle}>{doc.trackingId}</span>
+                    <span className="text-sm font-mono" style={mutedStyle}>#{doc.id.split('-')[0].toUpperCase()}</span>
                   </td>
                   <td className="px-6 py-4">
                     <span className="text-sm" style={mutedStyle}>{formatDate(doc.updatedAt)}</span>
@@ -297,18 +271,12 @@ export function DocumentRepository() {
           </table>
         </div>
 
-        {groupedDocuments.length === 0 && (
+        {sortedDocuments.length === 0 && (
           <div className="text-center py-12">
             <FileText className="mx-auto size-12" style={mutedStyle} />
             <h3 className="mt-4 text-lg font-medium" style={textStyle}>No documents found</h3>
             <p className="mt-2 text-sm" style={mutedStyle}>
-              {viewTab === 'drafts' ? (
-                <>
-                  <Link to="/upload" className="text-blue-600 dark:text-blue-400 hover:underline">Upload a document</Link> to get started.
-                </>
-              ) : (
-                'Try adjusting your search or filters.'
-              )}
+              'Try adjusting your search or filters.'
             </p>
           </div>
         )}

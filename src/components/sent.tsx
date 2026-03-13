@@ -7,22 +7,18 @@ import { useApp } from '../contexts/AppContext';
 import { documentMatchesSearch } from '../lib/search';
 import { DocumentSourceBadge } from './document-source-badge';
 
-type StatusTab = 'all' | 'pending' | 'signed' | 'rejected';
+type StatusTab = 'all' | 'forwarded' | 'viewed' | 'acknowledged';
 
 export function Sent() {
   const location = useLocation();
   const { documents, searchQuery, currentUserId } = useApp();
   const [activeTab, setActiveTab] = useState<StatusTab>('all');
-  // Sent = documents that are not draft (submitted/sent), then filter by global search
+  // Sent = all non-draft documents for this user, then filter by global search
   const sentDocuments = documents
-    .filter((d) => d.status !== 'draft')
     .filter((d) => documentMatchesSearch(d, searchQuery));
   const filteredDocuments = sentDocuments.filter((doc) => {
     if (activeTab === 'all') return true;
-    if (activeTab === 'pending') return doc.status === 'under-review';
-    if (activeTab === 'signed') return doc.status === 'approved';
-    if (activeTab === 'rejected') return doc.status === 'rejected';
-    return true;
+    return doc.status === activeTab;
   });
   const getFileIcon = (fileType: string) => {
     const iconClass = 'size-5';
@@ -59,31 +55,25 @@ export function Sent() {
 
   const getStatusBadge = (status: DocumentStatus) => {
     switch (status) {
-      case 'approved':
+      case 'acknowledged':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-green-500/20 text-green-700 dark:text-green-400">
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-teal-500/20 text-teal-700 dark:text-teal-400">
             <CheckCircle className="size-3" />
-            Approved
+            Acknowledged
           </span>
         );
-      case 'under-review':
+      case 'viewed':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-yellow-500/20 text-yellow-700 dark:text-yellow-400">
             <Clock className="size-3" />
-            Pending
+            Viewed
           </span>
         );
-      case 'rejected':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-red-500/20 text-red-700 dark:text-red-400">
-            <AlertTriangle className="size-3" />
-            Rejected
-          </span>
-        );
+      case 'forwarded':
       default:
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium opacity-90" style={{ backgroundColor: 'var(--muted)', color: 'var(--foreground)' }}>
-            {getStatusLabel(status)}
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-blue-500/20 text-blue-700 dark:text-blue-400">
+            Forwarded
           </span>
         );
     }
@@ -105,16 +95,15 @@ export function Sent() {
         <div className="px-6 py-4 border-b" style={{ borderColor: 'var(--border)' }}>
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              {(['all', 'pending', 'signed', 'rejected'] as const).map((tab) => (
+              {(['all', 'forwarded', 'viewed', 'acknowledged'] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-                    activeTab === tab ? 'bg-blue-600 text-white' : 'hover:opacity-90'
-                  }`}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${activeTab === tab ? 'bg-blue-600 text-white' : 'hover:opacity-90'
+                    }`}
                   style={activeTab === tab ? undefined : { color: 'var(--foreground)' }}
                 >
-                  {tab === 'all' ? 'All' : tab === 'signed' ? 'Signed' : tab === 'pending' ? 'Pending' : 'Rejected'}
+                  {tab === 'all' ? 'All' : tab.charAt(0).toUpperCase() + tab.slice(1)}
                 </button>
               ))}
             </div>
@@ -140,8 +129,17 @@ export function Sent() {
                 <tr key={doc.id} className="transition-colors hover:opacity-90" style={{ backgroundColor: 'var(--card)' }}>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className={`p-2 ${getFileIconBg(doc.fileType)} rounded-lg`}>
-                        {getFileIcon(doc.fileType)}
+                      <div className={`p-2 ${doc.files?.length > 1 ? 'bg-blue-600/10' : getFileIconBg(doc.files?.[0]?.type || '')} rounded-lg relative`}>
+                        {doc.files?.length > 1 ? (
+                          <>
+                            <FileText className="size-5 text-blue-600" />
+                            <span className="absolute -bottom-1 -right-1 bg-blue-800 text-white text-[0.6rem] rounded-full px-1">
+                              {doc.files.length}
+                            </span>
+                          </>
+                        ) : (
+                          getFileIcon(doc.files?.[0]?.type || '')
+                        )}
                       </div>
                       <div className="min-w-0 text-left">
                         <Link
@@ -157,7 +155,11 @@ export function Sent() {
                           <DocumentSourceBadge document={doc} currentUserId={currentUserId} />
                         </div>
                         <p className="text-xs m-0 mt-0.5 text-left" style={mutedStyle}>
-                          {doc.fileType} • {doc.fileSize}
+                          {doc.files?.length > 1
+                            ? (doc.files.length > 3
+                              ? `${doc.files.slice(0, 3).map((f: any) => f.type).join(', ')} (+${doc.files.length - 3} more)`
+                              : `${doc.files.map((f: any) => f.type).join(', ')}`)
+                            : `${doc.files?.[0]?.type || 'Unknown'} • ${doc.files?.[0]?.size || '0 B'}`}
                         </p>
                       </div>
                     </div>
@@ -168,7 +170,7 @@ export function Sent() {
                     </span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-sm" style={mutedStyle}>{doc.trackingId}</span>
+                    <span className="text-sm" style={mutedStyle}>#{doc.id.split('-')[0].toUpperCase()}</span>
                   </td>
                   <td className="px-6 py-4">
                     <span className="text-sm" style={mutedStyle}>{formatDate(doc.createdAt)}</span>

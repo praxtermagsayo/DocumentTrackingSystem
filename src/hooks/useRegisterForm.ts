@@ -10,7 +10,11 @@ export interface RegisterFormData {
   confirmPassword: string;
   phone: string;
   role: string;
+  departmentId: string;
 }
+
+import { Department } from '../types';
+import { fetchDepartments } from '../services/departments';
 
 const initialFormData: RegisterFormData = {
   firstName: '',
@@ -20,6 +24,7 @@ const initialFormData: RegisterFormData = {
   confirmPassword: '',
   phone: '',
   role: 'user',
+  departmentId: '',
 };
 
 export function useRegisterForm(isAuthenticated: boolean) {
@@ -31,10 +36,13 @@ export function useRegisterForm(isAuthenticated: boolean) {
   const [successMessage, setSuccessMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  const [departments, setDepartments] = useState<Department[]>([]);
+
   useEffect(() => {
     if (isAuthenticated) {
       navigate('/', { replace: true });
     }
+    fetchDepartments().then(setDepartments).catch(console.error);
   }, [isAuthenticated, navigate]);
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -73,6 +81,10 @@ export function useRegisterForm(isAuthenticated: boolean) {
       setError('Passwords do not match');
       return false;
     }
+    if (!formData.departmentId) {
+      setError('Please select a department');
+      return false;
+    }
     return true;
   }, [formData]);
 
@@ -106,6 +118,7 @@ export function useRegisterForm(isAuthenticated: boolean) {
               full_name: fullName,
               phone: formData.phone || undefined,
               role: formData.role,
+              department_id: formData.departmentId,
             },
           },
         });
@@ -137,5 +150,6 @@ export function useRegisterForm(isAuthenticated: boolean) {
     showConfirmPassword,
     setShowConfirmPassword,
     handleSubmit,
+    departments,
   };
 }

@@ -14,6 +14,7 @@ export interface ActivityRow {
 
 export interface ActivityWithCategory extends ActivityRow {
   event_categories?: { name: string } | null;
+  profiles?: { display_name: string } | null;
 }
 
 function rowToActivity(row: ActivityWithCategory): Activity {
@@ -26,6 +27,7 @@ function rowToActivity(row: ActivityWithCategory): Activity {
     categoryId: row.category_id,
     categoryName: row.event_categories?.name,
     description: row.description || '',
+    creatorName: row.profiles?.display_name || 'Unknown User',
     createdAt: row.created_at,
   };
 }
@@ -33,7 +35,7 @@ function rowToActivity(row: ActivityWithCategory): Activity {
 export async function fetchActivities(): Promise<Activity[]> {
   const { data, error } = await supabase
     .from('activities')
-    .select('*, event_categories(name)')
+    .select('*, event_categories(name), profiles(display_name)')
     .order('event_start', { ascending: false });
 
   if (error) throw error;

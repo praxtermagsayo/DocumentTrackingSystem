@@ -31,16 +31,19 @@ export interface UploadFormData {
   category: string;
   status: DocumentStatus;
   files: File[];
-  existingFiles: Array<{ id: string; title: string; fileSize: string; fileType: string }>;
-  recipients: string[];
-  trackingId?: string;
+  existingFiles: Array<{ id: string; name: string; size: string; type: string; path: string }>;
+  recipients: { email: string; name: string; departmentId?: string; departmentName?: string }[];
+  documentId?: string;
 }
+
+import { fetchUsersWithDepartments, fetchDepartments, UserProfileWithDepartment } from '../services/departments';
+import { Department } from '../types';
 
 const initialFormData: UploadFormData = {
   title: '',
   description: '',
   category: '',
-  status: 'under-review', // Default to review if not draft
+  status: 'forwarded',
   files: [],
   existingFiles: [],
   recipients: [],
@@ -60,21 +63,27 @@ export function useUploadDocument(
   const [isUploading, setIsUploading] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [categories, setCategories] = useState<DocumentCategory[]>([]);
+  const [availableUsers, setAvailableUsers] = useState<UserProfileWithDepartment[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
 
-  // Fetch dynamic categories
+  // Fetch dynamic categories, users, and departments
   const loadCategories = useCallback(async () => {
-    const userId = await getUserId();
-    if (!userId) return;
     try {
-      const data = await docCategoryService.fetchDocumentCategories(userId);
-      setCategories(data);
-      if (data.length > 0 && !formData.category) {
-        setFormData(prev => ({ ...prev, category: data[0].name }));
+      const [cats, usersList, deptsList] = await Promise.all([
+        docCategoryService.fetchDocumentCategories(),
+        fetchUsersWithDepartments(),
+        fetchDepartments()
+      ]);
+      setCategories(cats);
+      setAvailableUsers(usersList);
+      setDepartments(deptsList);
+      if (cats.length > 0 && !formData.category) {
+        setFormData(prev => ({ ...prev, category: cats[0].name }));
       }
     } catch (err) {
-      console.error('Failed to load categories', err);
+      console.error('Failed to load initial data', err);
     }
-  }, [getUserId, formData.category]);
+  }, [formData.category]);
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -169,53 +178,62 @@ export function useUploadDocument(
 
       setIsUploading(true);
       try {
-        let createdDocs;
-        if (formData.trackingId) {
+        let createdDocId = '';
+        if (formData.documentId) {
           // UPDATE MODE
-          // 1. Update metadata for all existing documents in this batch
+          // 1. If there are NEW files, we need to upload them and get their JSON objects
+          const newUploadedFiles = [];
+          if (formData.files.length > 0) {
+            for (const file of formData.files) {
+              const fileId = crypto.randomUUID();
+              const ext = file.name.split('.').pop() || 'bin';
+              const file_path = `${userId}/${formData.documentId}/${fileId}.${ext}`;
+              const { error: uploadError } = await supabase.storage.from('documents').upload(file_path, file, { upsert: false });
+              if (uploadError) throw new Error(`Failed to upload ${file.name}`);
+
+              newUploadedFiles.push({
+                id: fileId,
+                name: file.name,
+                path: file_path,
+                size: (file.size < 1024 * 1024) ? (file.size / 1024).toFixed(1) + ' KB' : (file.size / (1024 * 1024)).toFixed(1) + ' MB',
+                type: ext.toUpperCase(),
+              });
+            }
+          }
+
+          // 2. Merge existing files (that weren't removed) with the newly uploaded files
+          const finalFilesArray = [...formData.existingFiles, ...newUploadedFiles];
+
           const { error: updateErr } = await supabase
             .from('documents')
             .update({
               title: formData.title.trim(),
               description: formData.description.trim(),
               category: formData.category || 'Other',
-              status: isDraft ? 'draft' : 'sent',
+              status: isDraft ? 'draft' : 'forwarded',
               recipients: formData.recipients,
+              files: finalFilesArray,
               updated_at: new Date().toISOString(),
             })
-            .eq('tracking_id', formData.trackingId);
+            .eq('id', formData.documentId);
           if (updateErr) throw updateErr;
 
-          // 2. Upload any NEW files with the same trackingId
-          if (formData.files.length > 0) {
-            await documentService.createDocuments({
-              userId,
-              ownerName: user.name,
-              title: formData.title.trim(),
-              description: formData.description.trim(),
-              category: formData.category || 'Other',
-              status: isDraft ? 'draft' : 'sent',
-              recipients: formData.recipients,
-              files: formData.files,
-              trackingId: formData.trackingId,
-            });
-          }
-
-          // We don't have a single "id" for a batch, but we can use the first existing file's ID for the notification link
-          const existing = await documentService.fetchDocumentsByTrackingId(formData.trackingId);
-          createdDocs = existing;
+          createdDocId = formData.documentId;
         } else {
           // CREATE MODE
-          createdDocs = await documentService.createDocuments({
+          const createdDoc = await documentService.createDocuments({
             userId,
             ownerName: user.name,
+            ownerEmail: user.email,
             title: formData.title.trim(),
             description: formData.description.trim(),
             category: formData.category || 'Other',
-            status: isDraft ? 'draft' : 'sent',
-            recipients: formData.recipients,
+            status: isDraft ? 'draft' : 'forwarded',
+            recipients: formData.recipients.map(r => r.email),
+            routingSteps: formData.recipients, // New field for routing steps
             files: formData.files,
           });
+          createdDocId = createdDoc.id;
         }
 
         if (!isDraft) {
@@ -223,15 +241,32 @@ export function useUploadDocument(
           await new Promise(resolve => setTimeout(resolve, 800));
         }
 
-        await notificationService.createNotification({
-          userId,
-          title: isDraft ? 'Draft Updated' : 'Documents Sent',
-          message: isDraft
-            ? `"${formData.title}" has been updated.`
-            : `"${formData.title}" has been sent to ${formData.recipients.length} recipients.`,
-          type: 'success',
-          link: `/documents/${createdDocs[0].id}`,
-        });
+        if (isDraft) {
+          await notificationService.createNotification({
+            userId,
+            title: 'Draft Updated',
+            message: `"${formData.title}" has been updated.`,
+            type: 'success',
+            link: `/documents/${createdDocId}`,
+          });
+        } else if (formData.recipients.length > 0) {
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, email')
+            .in('email', formData.recipients);
+
+          if (profiles && profiles.length > 0) {
+            for (const profile of profiles) {
+              await notificationService.createNotification({
+                userId: profile.id,
+                title: 'Document Uploaded',
+                message: `"${formData.title}" has been uploaded by ${user.name || 'User'}.`,
+                type: 'info',
+                link: `/documents/${createdDocId}`,
+              });
+            }
+          }
+        }
 
         await refreshDocuments();
         await refreshNotifications();
@@ -257,22 +292,21 @@ export function useUploadDocument(
         .single();
       if (error) throw error;
       if (doc) {
-        // Load the whole batch
-        const batch = await documentService.fetchDocumentsByTrackingId(doc.tracking_id);
         setFormData({
           title: doc.title,
           description: doc.description || '',
           category: doc.category,
-          status: 'draft',
+          status: 'forwarded',
           files: [],
-          existingFiles: batch.map(d => ({
-            id: d.id,
-            title: d.title,
-            fileSize: d.fileSize,
-            fileType: d.fileType
-          })),
-          recipients: doc.recipients || [],
-          trackingId: doc.tracking_id,
+          existingFiles: Array.isArray(doc.files) ? doc.files.map((f: any) => ({
+            id: f.id,
+            name: f.name,
+            size: f.size,
+            type: f.type,
+            path: f.path
+          })) : [],
+          recipients: Array.isArray(doc.recipients) ? doc.recipients.map((email: string) => ({ email, name: email })) : [],
+          documentId: doc.id,
         });
       }
     } catch (err) {
@@ -293,6 +327,30 @@ export function useUploadDocument(
     }
   }, []);
 
+  const addRecipient = useCallback(
+    (userToAdd: { email: string; display_name: string; department_id?: string; department_name?: string }) => {
+      if (!userToAdd.email) return;
+
+      // Replace existing recipient for single routing flow
+      setFormData((prev) => ({
+        ...prev,
+        recipients: [
+          {
+            email: userToAdd.email,
+            name: userToAdd.display_name,
+            departmentId: userToAdd.department_id,
+            departmentName: userToAdd.department_name
+          }
+        ]
+      }));
+    },
+    []
+  );
+
+  const removeRecipient = useCallback(() => {
+    setFormData((prev) => ({ ...prev, recipients: [] }));
+  }, []);
+
   return {
     formData,
     setFormData,
@@ -306,18 +364,19 @@ export function useUploadDocument(
     handleFileChange,
     removeFile,
     clearFile,
+    addRecipient,
+    removeRecipient,
     handleSubmit,
     categories,
+    availableUsers,
     loadCategories,
     loadDraft,
     removeExistingFile,
-    discardDraft: useCallback(async (trackingId: string) => {
+    departments,
+    discardDraft: useCallback(async (documentId: string) => {
       setIsUploading(true);
       try {
-        const batch = await documentService.fetchDocumentsByTrackingId(trackingId);
-        for (const doc of batch) {
-          await documentService.deleteDocument(doc.id);
-        }
+        await documentService.deleteDocument(documentId);
         await refreshDocuments();
         navigate('/documents');
       } catch (err) {

@@ -12,6 +12,7 @@ import { Notifications } from './components/notifications';
 import { Activities } from './components/activities';
 import { EventCategories } from './components/event-categories';
 import { DocumentCategories } from './components/document-categories';
+import { Departments } from './components/departments';
 import { ScheduleReport } from './components/schedule-report';
 import { Settings } from './components/settings';
 import { Account } from './components/account';
@@ -19,8 +20,12 @@ import { Help } from './components/help';
 import { useApp } from './contexts/AppContext';
 
 function ProtectedRoute({ children }: { children?: React.ReactNode }) {
-  const { isAuthenticated, needsOnboarding } = useApp();
+  const { isAuthLoading, isAuthenticated, needsOnboarding } = useApp();
   const location = useLocation();
+
+  if (isAuthLoading) {
+    return <div className="min-h-screen bg-slate-50 dark:bg-[#0B1120]" />;
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
@@ -68,6 +73,7 @@ export const router = createBrowserRouter([
       { path: 'activities', Component: Activities },
       { path: 'event-categories', Component: EventCategories },
       { path: 'document-categories', Component: DocumentCategories },
+      { path: 'departments', Component: Departments },
       { path: 'settings', Component: Settings },
       { path: 'account', Component: Account },
       { path: 'help', Component: Help },

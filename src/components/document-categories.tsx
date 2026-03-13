@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router';
-import { Plus, FolderOpen, Pencil, Trash2 } from 'lucide-react';
+import { Plus, FolderOpen, Pencil, Trash2, Clock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import * as docCategoryService from '../services/documentCategories';
 import type { DocumentCategory, DocumentCategoryStatus } from '../types';
-import { toast } from 'sonner';
+import { toast } from '../lib/toast';
 import { useApp } from '../contexts/AppContext';
 import { PageTransition } from './page-transition';
 import { Skeleton } from './ui/skeleton';
+import { formatDate } from '../lib/format';
 
 export function DocumentCategories() {
     const navigate = useNavigate();
@@ -31,8 +32,8 @@ export function DocumentCategories() {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.user?.id) return;
         try {
-            const list = await docCategoryService.fetchDocumentCategories(session.user.id);
-            setCategories(list);
+            const data = await docCategoryService.fetchDocumentCategories();
+            setCategories(data);
         } catch {
             setCategories([]);
         } finally {
@@ -169,11 +170,11 @@ export function DocumentCategories() {
                 ) : categories.length === 0 ? (
                     <p style={mutedStyle}>No categories yet. Create one above.</p>
                 ) : (
-                    <ul className="space-y-2">
+                    <ul className="space-y-4 animate-stagger">
                         {categories.map((cat) => (
                             <li
                                 key={cat.id}
-                                className="flex items-center gap-4 py-3 px-4 rounded-lg"
+                                className="flex items-center gap-4 py-3 px-4 rounded-lg animate-elastic-slide transition-elastic hover:scale-[1.01] shadow-sm"
                                 style={{ backgroundColor: 'var(--muted)' }}
                             >
                                 {editingId === cat.id ? (
@@ -214,13 +215,22 @@ export function DocumentCategories() {
                                 ) : (
                                     <>
                                         <div className="flex-1">
-                                            <span className="font-medium" style={textStyle}>{cat.name}</span>
-                                            <span
-                                                className={`ml-2 px-2 py-0.5 rounded text-xs font-medium ${cat.status === 'active' ? 'bg-green-500/20 text-green-700 dark:text-green-400' : 'bg-gray-500/20 text-gray-600 dark:text-gray-400'
-                                                    }`}
-                                            >
-                                                {cat.status}
-                                            </span>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="font-medium text-lg" style={textStyle}>{cat.name}</span>
+                                                <span
+                                                    className={`px-2 py-0.5 rounded text-xs font-medium border ${cat.status === 'active' ? 'bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/20' : 'bg-gray-500/20 text-gray-600 dark:text-gray-400 border-gray-500/20'
+                                                        }`}
+                                                >
+                                                    {cat.status.charAt(0).toUpperCase() + cat.status.slice(1)}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-4 text-sm" style={mutedStyle}>
+                                                <span>Created by {cat.creatorName}</span>
+                                                <div className="flex items-center gap-1">
+                                                    <Clock className="size-3" />
+                                                    <span>{formatDate(cat.createdAt, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                                </div>
+                                            </div>
                                         </div>
                                         <button
                                             type="button"

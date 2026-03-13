@@ -89,8 +89,8 @@ export function Archived() {
                 <tr key={doc.id} className="transition-colors hover:opacity-90" style={{ backgroundColor: 'var(--card)' }}>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className={`p-2 ${getFileIconBg(doc.fileType)} rounded-lg opacity-60`}>
-                        {getFileIcon(doc.fileType)}
+                      <div className={`p-2 ${doc.files?.length > 1 ? 'bg-blue-600/10' : getFileIconBg(doc.files?.[0]?.type || '')} rounded-lg relative`}>
+                        {doc.files?.length > 1 ? <FileText className="size-5 text-blue-600" /> : getFileIcon(doc.files?.[0]?.type || '')}
                       </div>
                       <div className="min-w-0 text-left">
                         <Link
@@ -106,7 +106,11 @@ export function Archived() {
                           <DocumentSourceBadge document={doc} currentUserId={currentUserId} />
                         </div>
                         <p className="text-xs m-0 mt-0.5 text-left" style={mutedStyle}>
-                          {doc.fileType} • {doc.fileSize}
+                          {doc.files?.length > 1
+                            ? (doc.files.length > 3
+                              ? `${doc.files.slice(0, 3).map((f: any) => f.type).join(', ')} (+${doc.files.length - 3} more)`
+                              : `${doc.files.map((f: any) => f.type).join(', ')}`)
+                            : `${doc.files?.[0]?.type || 'Unknown'} • ${doc.files?.[0]?.size || '0 B'}`}
                         </p>
                       </div>
                     </div>
@@ -117,7 +121,7 @@ export function Archived() {
                     </span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-sm" style={mutedStyle}>{doc.trackingId}</span>
+                    <span className="text-sm" style={mutedStyle}>#{doc.id.split('-')[0].toUpperCase()}</span>
                   </td>
                   <td className="px-6 py-4">
                     <span className="text-sm" style={mutedStyle}>{formatDate(doc.updatedAt)}</span>

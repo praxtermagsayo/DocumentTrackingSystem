@@ -4,49 +4,45 @@ import { supabase } from '../lib/supabase';
 import * as activityService from '../services/activities';
 import * as eventCategoryService from '../services/eventCategories';
 import type { Activity, EventCategory } from '../types';
-import { formatDate } from '../lib/format';
+import '../styles/weekly-schedule.css';
 
 export function ScheduleReport() {
     const [activities, setActivities] = useState<Activity[]>([]);
-    const [categories, setCategories] = useState<EventCategory[]>([]);
     const [loading, setLoading] = useState(true);
-
-    // Auto-refresh every 5 minutes
-    useEffect(() => {
-        const interval = setInterval(() => {
-            loadData();
-        }, 5 * 60 * 1000);
-        return () => clearInterval(interval);
-    }, []);
+    const [categories, setCategories] = useState<EventCategory[]>([]);
+    const [theme, setTheme] = useState<'light' | 'dark'>(
+        typeof document !== 'undefined' && document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+    );
 
     const loadData = useCallback(async () => {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.user?.id) return;
         try {
-            const cats = await eventCategoryService.fetchEventCategories(session.user.id);
+            const cats = await eventCategoryService.fetchEventCategories();
             setCategories(cats);
         } catch {
             setCategories([]);
         }
         try {
-            const allActs = await activityService.fetchActivities(session.user.id);
+            const allActs = await activityService.fetchActivities();
 
-            // Filter for current week (Sunday to Saturday)
+            // Calculate Mon-Fri for the current week
             const now = new Date();
-            now.setHours(0, 0, 0, 0);
             const dayOfWeek = now.getDay();
-            const startOfWeek = new Date(now);
-            startOfWeek.setDate(now.getDate() - dayOfWeek); // Sunday
+            const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+            const monday = new Date(now);
+            monday.setDate(now.getDate() + diffToMonday);
+            monday.setHours(0, 0, 0, 0);
 
-            const endOfWeek = new Date(startOfWeek);
-            endOfWeek.setDate(startOfWeek.getDate() + 6); // Saturday
-            endOfWeek.setHours(23, 59, 59, 999);
+            const friday = new Date(monday);
+            friday.setDate(monday.getDate() + 4);
+            friday.setHours(23, 59, 59, 999);
 
+            // Filter activities that touch Mon-Fri
             const thisWeekActs = allActs.filter((act) => {
                 const actStart = new Date(act.eventStart);
                 const actEnd = new Date(act.eventEnd);
-                return (actStart >= startOfWeek && actStart <= endOfWeek) ||
-                    (actEnd >= startOfWeek && actEnd <= endOfWeek);
+                return (actStart <= friday && actEnd >= monday);
             });
 
             // Sort by start date
@@ -59,150 +55,202 @@ export function ScheduleReport() {
         setLoading(false);
     }, []);
 
+    // Auto-refresh and Real-time sync
     useEffect(() => {
         loadData();
+        
+        // Subscribe to real-time sync with improved reliability
+        const channel = supabase
+            .channel('public:activities')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'activities' },
+                () => loadData()
+            )
+            .subscribe();
+
+        // Robust Theme change detection
+        const observer = new MutationObserver(() => {
+            const isDark = document.documentElement.classList.contains('dark');
+            setTheme(isDark ? 'dark' : 'light');
+        });
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
+        // localStorage theme listener (for changes in Settings)
+        const handleStorage = (eList: StorageEvent) => {
+            if (eList.key === 'theme' || eList.key === 'dark-mode') {
+                const isDark = document.documentElement.classList.contains('dark');
+                setTheme(isDark ? 'dark' : 'light');
+            }
+        };
+        window.addEventListener('storage', handleStorage);
+
+        const interval = setInterval(() => loadData(), 5 * 60 * 1000);
+        
+        return () => {
+            clearInterval(interval);
+            supabase.removeChannel(channel);
+            observer.disconnect();
+            window.removeEventListener('storage', handleStorage);
+        };
     }, [loadData]);
 
-    // Group activities by date
-    const groupedActivities = activities.reduce((acc, act) => {
-        const actDate = new Date(act.eventStart);
-        actDate.setHours(0, 0, 0, 0);
-        const dateStr = actDate.toISOString();
-        if (!acc[dateStr]) acc[dateStr] = [];
-        acc[dateStr].push(act);
-        return acc;
-    }, {} as Record<string, Activity[]>);
+    // Calculate dates for Mon-Fri
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + diffToMonday);
+    monday.setHours(0, 0, 0, 0);
 
-    const sortedDates = Object.keys(groupedActivities).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+    const weekDays = [0, 1, 2, 3, 4].map(i => {
+        const date = new Date(monday);
+        date.setDate(monday.getDate() + i);
+        return date;
+    });
 
-    // Airport/TV style schedule UI
+    const getGridPos = (startStr: string, endStr: string) => {
+        const start = new Date(startStr);
+        const end = new Date(endStr);
+        const startIdx = Math.floor((start.getTime() - monday.getTime()) / (24 * 60 * 60 * 1000));
+        const endIdx = Math.ceil((end.getTime() - monday.getTime()) / (24 * 60 * 60 * 1000));
+        const colStart = Math.max(0, startIdx) + 1;
+        const colEnd = Math.min(5, endIdx) + 1;
+        if (colEnd <= colStart) return null;
+        return { colStart, colSpan: colEnd - colStart };
+    };
+
+    const rows: Activity[][] = [];
+    activities.forEach(act => {
+        const pos = getGridPos(act.eventStart, act.eventEnd);
+        if (!pos) return;
+        let placed = false;
+        for (const row of rows) {
+            const overlaps = row.some(rowAct => {
+                const rPos = getGridPos(rowAct.eventStart, rowAct.eventEnd);
+                if (!rPos) return false;
+                return !(pos.colStart >= rPos.colStart + rPos.colSpan || pos.colStart + pos.colSpan <= rPos.colStart);
+            });
+            if (!overlaps) {
+                row.push(act);
+                placed = true;
+                break;
+            }
+        }
+        if (!placed) rows.push([act]);
+    });
+
     return (
-        <div className="min-h-screen bg-[#0f172a] text-slate-50 font-sans p-6 md:p-12 overflow-x-hidden">
-            <div className="max-w-[1400px] mx-auto">
-                <header className="mb-12 flex items-end justify-between border-b border-slate-700 pb-6">
-                    <div>
-                        <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tight text-amber-400 flex items-center gap-4">
-                            <Calendar className="size-10 md:size-12" />
-                            Weekly Schedule
-                        </h1>
-                        <p className="text-slate-400 text-lg md:text-xl font-medium mt-2 tracking-wide">
-                            {formatDate(new Date().toISOString(), { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-                        </p>
-                    </div>
-                    <div className="hidden md:block text-right">
-                        <div className="text-5xl font-mono font-bold text-slate-200">
-                            {formatDate(new Date().toISOString(), { hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                        <div className="text-amber-400 font-bold tracking-widest uppercase mt-1">Local Time</div>
-                    </div>
+        <div key={theme} className="schedule-container p-4 md:p-12 transition-colors duration-500">
+            <div className="max-w-[1700px] mx-auto space-y-12">
+                <header className="flex flex-col items-center gap-2 mb-12">
+                    <h1 className="text-4xl md:text-5xl font-black tracking-widest uppercase text-slate-900 dark:text-white">
+                        {monday.toLocaleDateString('en-US', { month: 'long' })}
+                        <span className="text-blue-600 dark:text-blue-400 ml-4">{monday.getFullYear()}</span>
+                    </h1>
+                    <div className="h-1 w-24 bg-blue-600 rounded-full"></div>
                 </header>
 
                 {loading ? (
-                    <div className="flex justify-center items-center h-64">
-                        <div className="animate-pulse flex flex-col items-center">
-                            <div className="h-12 w-12 border-4 border-amber-400 border-t-transparent rounded-full animate-spin"></div>
-                            <p className="mt-4 text-slate-400 font-mono text-xl tracking-widest uppercase">Loading Schedule...</p>
-                        </div>
-                    </div>
-                ) : activities.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center p-20 bg-slate-800/50 rounded-2xl border border-slate-700">
-                        <Calendar className="size-24 text-slate-600 mb-6" />
-                        <h2 className="text-3xl font-bold text-slate-400 uppercase tracking-widest">No Events Scheduled</h2>
-                        <p className="text-slate-500 text-xl mt-2">The current week is clear.</p>
+                    <div className="flex justify-center items-center h-96">
+                        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-blue-600"></div>
                     </div>
                 ) : (
-                    <div className="space-y-12">
-                        {sortedDates.map((dateStr) => {
-                            const acts = groupedActivities[dateStr];
-                            const dateObj = new Date(dateStr);
-                            const isToday = new Date().toDateString() === dateObj.toDateString();
-
-                            return (
-                                <div key={dateStr} className={`rounded-xl overflow-hidden shadow-2xl ${isToday ? 'ring-2 ring-amber-400 ring-offset-4 ring-offset-[#0f172a]' : ''}`}>
-                                    <div className={`bg-slate-800 px-8 py-4 border-b border-slate-700 flex items-center justify-between ${isToday ? 'bg-slate-700' : ''}`}>
-                                        <h2 className="text-2xl md:text-3xl font-black uppercase tracking-wider text-slate-100">
-                                            {formatDate(dateObj.toISOString(), { weekday: 'long' })}
-                                            <span className="text-slate-400 font-medium ml-4 text-xl md:text-2xl">
-                                                {formatDate(dateObj.toISOString(), { month: 'short', day: 'numeric' })}
-                                            </span>
-                                        </h2>
-                                        {isToday && (
-                                            <span className="bg-amber-400 text-slate-900 font-bold px-4 py-1 rounded-full text-sm tracking-widest uppercase animate-pulse">
-                                                Today
-                                            </span>
-                                        )}
+                    <div className="grid-main-container">
+                        <div className="header-row" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}>
+                            {weekDays.map((date, i) => {
+                                const isToday = new Date().toDateString() === date.toDateString();
+                                const dayName = date.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
+                                return (
+                                    <div key={i} className={`day-header-cell ${isToday ? 'is-today' : ''} last:border-0`}>
+                                        <div className={`text-[11px] font-black uppercase tracking-[0.2em] mb-3 ${isToday ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`}>
+                                            {dayName}
+                                        </div>
+                                        <div className={`text-3xl font-black ${isToday ? 'text-slate-900 dark:text-white' : 'text-slate-700 dark:text-slate-400'}`}>
+                                            {date.getDate()}
+                                        </div>
                                     </div>
+                                );
+                            })}
+                        </div>
 
-                                    <div className="bg-slate-900/80 backdrop-blur-sm shadow-inner">
-                                        <table className="w-full text-left border-collapse">
-                                            <thead>
-                                                <tr className="bg-slate-900 text-slate-400 top-0 border-b border-slate-800 uppercase tracking-widest text-xs md:text-sm font-bold">
-                                                    <th className="py-4 px-8 w-[20%]">Time</th>
-                                                    <th className="py-4 px-8 w-[40%]">Event</th>
-                                                    <th className="py-4 px-8 w-[25%] hidden md:table-cell">Category</th>
-                                                    <th className="py-4 px-8 w-[15%] text-right">Duration</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-800/50">
-                                                {acts.map((act) => {
-                                                    const catName = categories.find((c) => c.id === act.categoryId)?.name ?? 'Unknown';
-                                                    const eventName = act.description?.trim() || catName || '—';
+                        <div className="relative p-12">
+                            <div className="absolute inset-0 grid pointer-events-none opacity-[0.03] dark:opacity-[0.05]" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}>
+                                {[...Array(5)].map((_, i) => (
+                                    <div key={i} className="border-r border-slate-900 dark:border-white h-full last:border-0"></div>
+                                ))}
+                            </div>
 
-                                                    const start = new Date(act.eventStart);
-                                                    const end = new Date(act.eventEnd);
-                                                    const isHappeningNow = isToday && new Date() >= start && new Date() <= end;
+                            <div className="absolute inset-0 grid pointer-events-none" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}>
+                                {weekDays.map((date, i) => {
+                                    const isToday = new Date().toDateString() === date.toDateString();
+                                    return <div key={i} className={`column-highlight ${isToday ? 'opacity-100' : 'opacity-0'}`}></div>
+                                })}
+                            </div>
 
-                                                    const durationMs = end.getTime() - start.getTime();
-                                                    const durationMins = Math.round(durationMs / 60000);
-                                                    const hours = Math.floor(durationMins / 60);
-                                                    const mins = durationMins % 60;
-                                                    const durationStr = hours > 0
-                                                        ? `${hours}h ${mins > 0 ? `${mins}m` : ''}`
-                                                        : `${mins}m`;
-
-                                                    return (
-                                                        <tr
-                                                            key={act.id}
-                                                            className={`group transition-all duration-300 hover:bg-slate-800 ${isHappeningNow ? 'bg-slate-800/80 relative' : ''}`}
-                                                        >
-                                                            {/* Glowing indicator line for active event */}
-                                                            {isHappeningNow && (
-                                                                <td className="absolute left-0 top-0 bottom-0 w-1 bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.8)]"></td>
-                                                            )}
-
-                                                            <td className="py-5 md:py-6 px-8 font-mono text-lg md:text-xl font-bold whitespace-nowrap text-amber-400">
-                                                                {formatDate(act.eventStart, { hour: '2-digit', minute: '2-digit' })}
-                                                                <span className="text-slate-500 mx-2 font-normal text-base">-</span>
-                                                                {formatDate(act.eventEnd, { hour: '2-digit', minute: '2-digit' })}
-                                                            </td>
-                                                            <td className="py-5 md:py-6 px-8">
-                                                                <div className={`text-xl md:text-2xl font-bold ${isHappeningNow ? 'text-white' : 'text-slate-200'}`}>
-                                                                    {eventName}
-                                                                </div>
-                                                                {/* Mobile category view */}
-                                                                <div className="mt-2 md:hidden">
-                                                                    <span className="inline-block px-3 py-1 bg-slate-800 border border-slate-700 rounded-md text-xs font-semibold text-slate-300 tracking-wider">
-                                                                        {catName}
-                                                                    </span>
-                                                                </div>
-                                                            </td>
-                                                            <td className="py-5 md:py-6 px-8 hidden md:table-cell">
-                                                                <span className={`inline-block px-3 py-1 rounded-md text-sm font-semibold tracking-wider uppercase ${isHappeningNow ? 'bg-amber-400/10 text-amber-400 border border-amber-400/20' : 'bg-slate-800 text-slate-400 border border-slate-700'}`}>
-                                                                    {catName}
-                                                                </span>
-                                                            </td>
-                                                            <td className="py-5 md:py-6 px-8 text-right font-mono text-lg text-slate-500 font-medium">
-                                                                {durationStr}
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
+                            <div className="relative z-10 space-y-12">
+                                {rows.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-40 text-slate-300 dark:text-slate-700">
+                                        <Calendar className="size-24 mb-8 opacity-20" />
+                                        <p className="font-black uppercase tracking-[0.4em] text-sm">Empty Schedule</p>
                                     </div>
-                                </div>
-                            );
-                        })}
+                                ) : (
+                                    rows.map((row, rowIdx) => (
+                                        <div key={rowIdx} className="grid" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: '2rem' }}>
+                                            {row.map(act => {
+                                                const pos = getGridPos(act.eventStart, act.eventEnd);
+                                                if (!pos) return null;
+                                                const cat = categories.find(c => c.id === act.categoryId);
+                                                const now = new Date();
+                                                const actStart = new Date(act.eventStart);
+                                                const actEnd = new Date(act.eventEnd);
+                                                const isPast = now > actEnd;
+                                                const isOngoing = now >= actStart && now <= actEnd;
+                                                const formatT = (date: Date) => date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                                                const getDayLabel = (date: Date) => date.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
+                                                const showDays = pos.colSpan > 1;
+
+                                                return (
+                                                    <div
+                                                        key={act.id}
+                                                        className={`event-card animate-wave ${isOngoing ? 'is-ongoing' : ''} ${isPast ? 'is-past' : ''}`}
+                                                        style={{ gridColumn: `${pos.colStart} / span ${pos.colSpan}`, animationDelay: `${pos.colStart * 0.2}s` }}
+                                                    >
+                                                        <div className="flex flex-col h-full">
+                                                            <div className="category-label bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 mb-3">
+                                                                {cat?.name || 'Event'}
+                                                            </div>
+                                                            <h3 className="title mb-4">{act.description || cat?.name}</h3>
+                                                            <div className="time-badge-group justify-center">
+                                                                <div className="time-badge">
+                                                                    {showDays && <span className="text-blue-500 font-bold mr-1">{getDayLabel(actStart)}</span>}
+                                                                    {formatT(actStart)}
+                                                                </div>
+                                                                <div className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-700"></div>
+                                                                <div className="time-badge">
+                                                                    {showDays && <span className="text-blue-500 font-bold mr-1">{getDayLabel(actEnd)}</span>}
+                                                                    {formatT(actEnd)}
+                                                                </div>
+                                                                {isOngoing && (
+                                                                    <div className="ml-4 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 text-[9px] font-black uppercase tracking-tighter">
+                                                                        <span className="relative flex h-1.5 w-1.5">
+                                                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                                                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500"></span>
+                                                                        </span>
+                                                                        Ongoing
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        {showDays && <div className="multi-day-glow"><div className="multi-day-dot"></div></div>}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>

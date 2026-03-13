@@ -11,14 +11,14 @@ import {
   Save,
   Loader2,
 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '../lib/toast';
 import { supabase } from '../lib/supabase';
 import { cardStyle, inputStyle } from '../styles/themeStyles';
 import * as profileService from '../services/profile';
 
 export function Account() {
   const navigate = useNavigate();
-  const { user, currentUserId } = useApp();
+  const { user, currentUserId, refreshAvatar } = useApp();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
@@ -129,6 +129,7 @@ export function Account() {
 
       await profileService.updateProfile(currentUserId, { avatar_url: publicUrl });
       setAvatarUrl(publicUrl);
+      await refreshAvatar(); // propagate to sidebar & all UserAvatar instances
       toast.success('Profile picture updated');
     } catch (err) {
       const raw = err && typeof err === 'object' && 'message' in err
@@ -156,6 +157,7 @@ export function Account() {
     try {
       await profileService.updateProfile(currentUserId, { avatar_url: null });
       setAvatarUrl(null);
+      await refreshAvatar(); // propagate to sidebar & all UserAvatar instances
       toast.success('Profile picture removed');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to remove');

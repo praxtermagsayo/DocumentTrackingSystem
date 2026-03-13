@@ -34,11 +34,15 @@ export function formatNotificationTime(timestamp: string): string {
   const date = new Date(timestamp);
   const now = new Date();
   const diff = now.getTime() - date.getTime();
-  const hours = Math.floor(diff / (1000 * 60 * 60));
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  if (hours < 1) return 'Just now';
-  if (hours < 24) return `${hours}h ago`;
-  if (days < 7) return `${days}d ago`;
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (seconds < 60) return `${Math.max(1, seconds)} second${seconds === 1 ? '' : 's'} ago`;
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  if (days < 7) return `${days} day${days === 1 ? '' : 's'} ago`;
   return date.toLocaleDateString();
 }
 
@@ -60,33 +64,38 @@ export function formatRelativeTime(timestamp: string): string {
 
 export function getStatusColor(status: DocumentStatus): string {
   switch (status) {
+    case 'forwarded':
+      return 'status-sent';
+    case 'viewed':
+      return 'status-viewed';
+    case 'acknowledged':
     case 'approved':
-      return 'bg-green-100 text-green-800';
-    case 'under-review':
-      return 'bg-yellow-100 text-yellow-800';
-    case 'draft':
-      return 'bg-slate-100 text-slate-800';
+    case 'completed':
+      return 'status-acknowledged';
+    case 'returned':
     case 'rejected':
-      return 'bg-red-100 text-red-800';
-    case 'archived':
-      return 'bg-gray-100 text-gray-800';
+      return 'bg-red-100 text-red-700 border-red-200 dark:bg-red-500/20 dark:text-red-400 dark:border-red-500/30';
     default:
-      return 'bg-slate-100 text-slate-800';
+      return 'bg-slate-100 text-slate-700 border-slate-200';
   }
 }
 
 export function getStatusLabel(status: DocumentStatus): string {
   switch (status) {
-    case 'draft':
-      return 'Draft';
-    case 'under-review':
-      return 'Pending';
+    case 'forwarded':
+      return 'Forwarded';
+    case 'viewed':
+      return 'Viewed';
+    case 'acknowledged':
+      return 'Acknowledged';
     case 'approved':
       return 'Approved';
+    case 'returned':
+      return 'Returned';
     case 'rejected':
       return 'Rejected';
-    case 'archived':
-      return 'Archived';
+    case 'completed':
+      return 'Completed';
     default:
       return status.charAt(0).toUpperCase() + status.slice(1);
   }

@@ -18,8 +18,10 @@ import {
   FolderOpen,
   FileBarChart,
   ChevronRight,
+  Building,
 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
+import { UserAvatar } from './ui/UserAvatar';
 
 export function Layout() {
   const location = useLocation();
@@ -33,6 +35,8 @@ export function Layout() {
     setSearchQuery,
   } = useApp();
   const isDocumentRepository = location.pathname === '/documents';
+  const isDashboard = location.pathname === '/';
+  const isAdmin = user?.role === 'admin';
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showReportMenu, setShowReportMenu] = useState(true);
 
@@ -54,13 +58,20 @@ export function Layout() {
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/documents', label: 'Document Repository', icon: FileText },
     { path: '/archived', label: 'Archived', icon: Archive },
-    { path: '/document-categories', label: 'Document Categories', icon: FolderOpen },
   ];
+
+  if (isAdmin) {
+    navItems.push({ path: '/document-categories', label: 'Document Categories', icon: FolderOpen });
+    navItems.push({ path: '/departments', label: 'Departments', icon: Building });
+  }
 
   const scheduleItems = [
     { path: '/activities', label: 'Events', icon: Calendar },
-    { path: '/event-categories', label: 'Event Categories', icon: Tag },
   ];
+
+  if (isAdmin) {
+    scheduleItems.push({ path: '/event-categories', label: 'Event Categories', icon: Tag });
+  }
 
   const handleLogout = () => {
     logout();
@@ -234,9 +245,7 @@ export function Layout() {
               e.currentTarget.style.backgroundColor = '';
             }}
           >
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm font-medium">
-              {user?.initials}
-            </div>
+            <UserAvatar size="sm" />
             <div className="flex-1 min-w-0 text-left">
               <p className="text-sm font-medium truncate" style={{ color: 'var(--sidebar-foreground)' }}>
                 {user?.name}
@@ -295,7 +304,7 @@ export function Layout() {
           className="h-16 flex items-center justify-between px-8 border-b"
           style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}
         >
-          {!isDocumentRepository ? (
+          {!isDocumentRepository && !isDashboard ? (
             <div className="flex-1 max-w-2xl">
               <div className="relative">
                 <Search

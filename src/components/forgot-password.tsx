@@ -4,6 +4,8 @@ import { FileText, Mail } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from '../lib/toast';
 
+import logo from '../assets/doctrack.png';
+
 export function ForgotPassword({ embedded = false }: { embedded?: boolean }) {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -103,11 +105,8 @@ export function ForgotPassword({ embedded = false }: { embedded?: boolean }) {
       <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: 'var(--background)' }}>
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center gap-3 mb-4">
-              <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-                <FileText className="size-7 text-white" />
-              </div>
-              <h1 className="text-3xl font-bold" style={textStyle}>DocTrack</h1>
+            <div className="flex flex-col items-center justify-center mb-4">
+              <img src={logo} alt="DocTrack Logo" className="w-40 h-auto" />
             </div>
           </div>
           <div className="rounded-2xl shadow-xl border p-8" style={cardStyle}>
@@ -122,11 +121,8 @@ export function ForgotPassword({ embedded = false }: { embedded?: boolean }) {
     <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: 'var(--background)' }}>
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center gap-3 mb-4">
-            <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-              <FileText className="size-7 text-white" />
-            </div>
-            <h1 className="text-3xl font-bold" style={textStyle}>DocTrack</h1>
+          <div className="flex flex-col items-center justify-center mb-4">
+            <img src={logo} alt="DocTrack Logo" className="w-40 h-auto" />
           </div>
           <p style={mutedStyle}>Document Tracking & Management System</p>
         </div>

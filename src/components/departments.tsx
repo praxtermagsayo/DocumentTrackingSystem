@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Building, Plus, Trash2, UserPlus, Users, Search, X, Check, Loader2, ChevronRight, ChevronLeft } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 import {
     fetchDepartments,
     createDepartment,
@@ -29,8 +30,8 @@ export function Departments() {
     // Search State
     const [searchQuery, setSearchQuery] = useState('');
 
-    const loadData = useCallback(async () => {
-        setLoading(true);
+    const loadData = useCallback(async (silent = false) => {
+        if (!silent) setLoading(true);
         try {
             const [depts, usersList] = await Promise.all([
                 fetchDepartments(),
@@ -42,12 +43,32 @@ export function Departments() {
             toast.error('Failed to load department data');
             console.error(err);
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     }, []);
 
     useEffect(() => {
         loadData();
+
+        // Real-time subscriptions
+        const deptsChannel = supabase
+            .channel('public:departments')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'departments' }, () => {
+                loadData(true);
+            })
+            .subscribe();
+
+        const profilesChannel = supabase
+            .channel('public:profiles-depts')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+                loadData(true);
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(deptsChannel);
+            supabase.removeChannel(profilesChannel);
+        };
     }, [loadData]);
 
     const handleCreateOrUpdate = async (e: React.FormEvent) => {

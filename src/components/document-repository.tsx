@@ -9,7 +9,7 @@ import { getStatusLabel, getStatusColor } from '../lib/format';
 import { PageTransition } from './page-transition';
 
 type ViewTab = 'all' | 'inbox' | 'sent';
-type StatusTab = 'all' | 'forwarded' | 'viewed' | 'acknowledged';
+type StatusTab = 'all' | 'forwarded' | 'viewed' | 'acknowledged' | 'completed' | 'returned';
 
 export function DocumentRepository() {
   const location = useLocation();
@@ -157,7 +157,7 @@ export function DocumentRepository() {
               ))}
             </div>
             <div className="flex items-center gap-2">
-              {(['all', 'forwarded', 'viewed', 'acknowledged'] as const).map((tab) => (
+              {(['all', 'forwarded', 'viewed', 'acknowledged', 'completed', 'returned'] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setStatusTab(tab)}

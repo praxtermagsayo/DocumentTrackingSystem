@@ -211,7 +211,7 @@ export function useUploadDocument(
               description: formData.description.trim(),
               category: formData.category || 'Other',
               status: isDraft ? 'draft' : 'forwarded',
-              recipients: formData.recipients,
+              recipients: formData.recipients.map(r => r.email),
               files: finalFilesArray,
               updated_at: new Date().toISOString(),
             })
@@ -331,24 +331,34 @@ export function useUploadDocument(
     (userToAdd: { email: string; display_name: string; department_id?: string; department_name?: string }) => {
       if (!userToAdd.email) return;
 
-      // Replace existing recipient for single routing flow
-      setFormData((prev) => ({
-        ...prev,
-        recipients: [
-          {
-            email: userToAdd.email,
-            name: userToAdd.display_name,
-            departmentId: userToAdd.department_id,
-            departmentName: userToAdd.department_name
-          }
-        ]
-      }));
+      setFormData((prev) => {
+        // Prevent duplicate recipients
+        if (prev.recipients.some(r => r.email === userToAdd.email)) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          recipients: [
+            ...prev.recipients,
+            {
+              email: userToAdd.email,
+              name: userToAdd.display_name,
+              departmentId: userToAdd.department_id,
+              departmentName: userToAdd.department_name
+            }
+          ]
+        };
+      });
     },
     []
   );
 
-  const removeRecipient = useCallback(() => {
-    setFormData((prev) => ({ ...prev, recipients: [] }));
+  const removeRecipient = useCallback((index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      recipients: prev.recipients.filter((_, i) => i !== index)
+    }));
   }, []);
 
   return {

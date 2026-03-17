@@ -15,7 +15,6 @@ export interface DocumentRow {
   created_at: string;
   updated_at: string;
   recipients?: string[] | null;
-  team_id?: string | null;
   assigned_to?: string | null;
   assigned_to_name?: string | null;
   files?: any[] | null;
@@ -41,10 +40,22 @@ function rowToDocument(row: DocumentRow): Document {
 }
 
 export async function fetchDocuments(userId: string, userEmail: string): Promise<Document[]> {
+  // 1. Find document IDs where user is a participant in routing
+  const { data: routingDocs, error: routingError } = await supabase
+    .from('document_routing')
+    .select('document_id')
+    .eq('receiver_user_id', userId);
+
+  if (routingError) console.error('Error fetching routing participations:', routingError);
+  
+  const participations = (routingDocs || []).map(r => r.document_id);
+  const participationOr = participations.length > 0 ? `,id.in.(${participations.join(',')})` : '';
+
+  // 2. Build the OR filter for documents the user owns, is a recipient of, or participated in routing for
   const { data, error } = await supabase
     .from('documents')
     .select('*, document_routing(*)')
-    .or(`user_id.eq.${userId},recipients.cs.{${userEmail}},document_routing.receiver_user_id.eq.${userId}`)
+    .or(`user_id.eq.${userId},recipients.cs.{${userEmail}}${participationOr}`)
     .order('updated_at', { ascending: false });
 
   if (error) throw error;
@@ -302,8 +313,8 @@ export async function recordDocumentView(
     .from('documents')
     .update({ status: 'viewed', updated_at: new Date().toISOString() })
     .eq('id', documentId)
-    // we only update if it is currently 'sent', so we don't downgrade 'acknowledged'
-    .eq('status', 'sent');
+    // viewed can come from sent or forwarded
+    .in('status', ['sent', 'forwarded']);
 
   if (updateErr) {
     console.error('Error updating document status to viewed:', updateErr);
@@ -366,7 +377,7 @@ export async function fetchDocumentHistory(documentId: string): Promise<{ id: st
     .from('document_history')
     .select('id, document_id, status, comment, updated_by, created_at')
     .eq('document_id', documentId)
-    .order('created_at', { ascending: true });
+    .order('created_at', { ascending: false });
   if (error) throw error;
   return (data || []).map((row: { id: string; document_id: string; status: string; comment: string; updated_by: string; created_at: string }) => ({
     id: row.id,
@@ -491,6 +502,14 @@ export async function acknowledgeDocument(
     updated_by: displayName
   });
 
+  // 3. Update main document status
+  await supabase
+    .from('documents')
+    .update({ status: 'acknowledged', updated_at: new Date().toISOString() })
+    .eq('id', documentId)
+    // can only acknowledge if viewed, sent or forwarded
+    .in('status', ['sent', 'forwarded', 'viewed']);
+
   return {
     id: data.id,
     documentId: data.document_id,
@@ -510,7 +529,7 @@ export interface DocumentRoutingStep {
   sender_user_id: string;
   receiver_user_id: string;
   receiver_department_id: string;
-  status: 'pending' | 'approved' | 'rejected' | 'returned' | 'viewed';
+  status: 'pending' | 'approved' | 'rejected' | 'returned' | 'viewed' | 'forwarded';
   comment: string | null;
   created_at: string;
   action_at: string | null;
@@ -528,7 +547,7 @@ export async function fetchDocumentRouting(documentId: string): Promise<Document
       department:departments!receiver_department_id(name)
     `)
     .eq('document_id', documentId)
-    .order('step_number', { ascending: true });
+    .order('step_number', { ascending: false });
 
   if (error) throw error;
 
@@ -567,8 +586,8 @@ export async function processRoutingAction(
   const { error: auditErr } = await supabase.from('document_audit_trail').insert({
     document_id: documentId,
     action_by: userId,
-    action_type: action,
-    comment: comment || `Document ${action}d by ${userName}`
+    action_type: status,
+    comment: comment || `Document ${status} by ${userName}`
   });
 
   if (auditErr) console.error('Audit trail error:', auditErr);
@@ -578,21 +597,28 @@ export async function processRoutingAction(
   if (action === 'reject') docStatus = 'rejected';
   else if (action === 'return') docStatus = 'returned';
   else if (action === 'approve') {
+    // Check current step number
+    const { data: currStep } = await supabase
+      .from('document_routing')
+      .select('step_number')
+      .eq('id', stepId)
+      .single();
+    
+    const currNum = currStep?.step_number || 0;
+
     // Check if there's a next step
     const { data: nextStep } = await supabase
       .from('document_routing')
       .select('id')
       .eq('document_id', documentId)
-      .gt('step_number', (await supabase.from('document_routing').select('step_number').eq('id', stepId).single()).data?.step_number || 0)
+      .gt('step_number', currNum)
       .order('step_number', { ascending: true })
-      .limit(1)
-      .single();
+      .limit(1);
 
-    if (!nextStep) {
+    if (!nextStep || nextStep.length === 0) {
       docStatus = 'completed'; // No more steps
     } else {
       docStatus = 'approved'; // Intermediate approval
-      // We could mark next step as 'pending' but they are already 'pending' by default
     }
   }
 
@@ -612,9 +638,22 @@ export async function forwardDocument(params: {
   receiverName: string;
   receiverDeptId: string;
   comment?: string;
+  isToPresidency?: boolean;
 }): Promise<void> {
-  const { documentId, currentStepId, senderId, senderName, receiverId, receiverEmail, receiverName, receiverDeptId, comment } = params;
+  const { documentId, currentStepId, senderId, senderName, receiverId, receiverEmail, receiverName, receiverDeptId, comment, isToPresidency } = params;
   const now = new Date().toISOString();
+
+  // Determine standard comment based on context if no custom comment provided
+  let finalComment = comment;
+  if (!finalComment) {
+    if (!currentStepId) {
+      finalComment = "Initial routing step";
+    } else if (isToPresidency) {
+      finalComment = "Forwarded to Office of the President";
+    } else {
+      finalComment = "Forwarded to next department";
+    }
+  }
 
   // 1. If there's a current step, mark it as approved
   if (currentStepId) {
@@ -623,7 +662,7 @@ export async function forwardDocument(params: {
       .update({
         status: 'approved',
         action_at: now,
-        comment: comment || 'Forwarded to next department'
+        comment: finalComment
       })
       .eq('id', currentStepId);
     if (stepErr) throw stepErr;
@@ -688,14 +727,14 @@ export async function forwardDocument(params: {
     document_id: documentId,
     action_by: senderId,
     action_type: 'forwarded',
-    comment: comment || `Document forwarded to ${receiverName} (${receiverEmail})`
+    comment: finalComment
   });
 
   // 6. Notify legacy history
   await supabase.from('document_history').insert({
     document_id: documentId,
     status: 'forwarded',
-    comment: comment || `Forwarded to ${receiverName}`,
+    comment: finalComment,
     updated_by: senderName
   });
 }

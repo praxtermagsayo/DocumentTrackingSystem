@@ -4,6 +4,8 @@ import { FileText, Lock, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from '../lib/toast';
 
+import logo from '../assets/doctrack.png';
+
 export function UpdatePassword() {
   const navigate = useNavigate();
   const [password, setPassword] = useState('');
@@ -52,11 +54,8 @@ export function UpdatePassword() {
     <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: 'var(--background)' }}>
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center gap-3 mb-4">
-            <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-              <FileText className="size-7 text-white" />
-            </div>
-            <h1 className="text-3xl font-bold" style={textStyle}>DocTrack</h1>
+          <div className="flex flex-col items-center justify-center mb-4">
+            <img src={logo} alt="DocTrack Logo" className="w-40 h-auto" />
           </div>
           <p style={mutedStyle}>Document Tracking & Management System</p>
         </div>

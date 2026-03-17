@@ -4,6 +4,8 @@ import { FileText, Mail, Lock, Eye, EyeOff, User, Phone, ShieldHalf, Building } 
 import { useApp } from '../contexts/AppContext';
 import { useRegisterForm } from '../hooks/useRegisterForm';
 
+import logo from '../assets/doctrack.png';
+
 export function Register({ embedded = false }: { embedded?: boolean }) {
   const { isAuthenticated, signInWithGoogle } = useApp();
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -357,11 +359,8 @@ export function Register({ embedded = false }: { embedded?: boolean }) {
     <div className="min-h-screen flex items-center justify-center p-4" style={pageBg}>
       <div className="w-full max-w-2xl">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center gap-3 mb-4">
-            <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-              <FileText className="size-7 text-white" />
-            </div>
-            <h1 className="text-3xl font-bold" style={textStyle}>DocTrack</h1>
+          <div className="flex flex-col items-center justify-center mb-4">
+            <img src={logo} alt="DocTrack Logo" className="w-40 h-auto" />
           </div>
           <p style={mutedStyle}>Create your account to get started</p>
         </div>

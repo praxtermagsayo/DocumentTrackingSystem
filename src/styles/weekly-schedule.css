@@ -118,8 +118,8 @@
   padding: 1.5rem;
   background-color: var(--schedule-card-bg-light);
   border: 1px solid var(--schedule-border-light);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-  transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+    transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
   align-items: center; /* Center horizontally */
   text-align: center; /* Center text */
   width: 98%; 

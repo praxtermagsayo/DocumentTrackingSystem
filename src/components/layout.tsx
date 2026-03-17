@@ -23,6 +23,8 @@ import {
 import { useApp } from '../contexts/AppContext';
 import { UserAvatar } from './ui/UserAvatar';
 
+import logo from '../assets/doctrack.png';
+
 export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -94,11 +96,9 @@ export function Layout() {
           className="h-16 flex items-center px-6 border-b"
           style={{ borderColor: 'var(--sidebar-border)' }}
         >
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <FileText className="size-5 text-white" />
-            </div>
-            <span className="font-semibold" style={{ color: 'var(--sidebar-foreground)' }}>
+          <div className="flex items-center gap-3">
+            <img src={logo} alt="DocTrack Logo" className="h-8 w-auto" />
+            <span className="font-bold text-lg tracking-tight" style={{ color: 'var(--sidebar-foreground)' }}>
               DocTrack
             </span>
           </div>

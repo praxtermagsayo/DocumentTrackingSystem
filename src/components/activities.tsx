@@ -52,9 +52,10 @@ export function Activities() {
   const mutedStyle = { color: 'var(--muted-foreground)' };
   const inputStyle = { backgroundColor: 'var(--input-background)', color: 'var(--foreground)', borderColor: 'var(--border)' };
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (silent = false) => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user?.id) return;
+    if (!silent) setLoading(true);
     try {
       const cats = await eventCategoryService.fetchEventCategories();
       setCategories(cats);
@@ -69,11 +70,23 @@ export function Activities() {
     } catch {
       setActivities([]);
     }
-    setLoading(false);
+    if (!silent) setLoading(false);
   }, []);
 
   useEffect(() => {
     loadData();
+
+    // Real-time subscription for activities
+    const channel = supabase
+      .channel('public:activities')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'activities' }, () => {
+        loadData(true);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [loadData]);
 
   useEffect(() => {

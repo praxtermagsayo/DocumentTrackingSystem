@@ -90,7 +90,26 @@ export function UploadDocument() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="upload-screen-container">
+      <style>{`
+        .upload-screen-container {
+          max-width: 1280px;
+          margin: 0 auto;
+          padding: 0 1.5rem;
+        }
+        .upload-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 2rem;
+          align-items: start;
+        }
+        @media (min-width: 1024px) {
+          .upload-grid {
+            grid-template-columns: 1fr 1fr;
+          }
+        }
+      `}</style>
+
       <div className="mb-6">
         <h2 className="text-2xl font-semibold" style={textStyle}>
           {editId ? 'Edit Draft' : 'Upload Document'}
@@ -106,8 +125,11 @@ export function UploadDocument() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="rounded-lg shadow-sm border p-6" style={cardStyle}>
+      <form onSubmit={handleSubmit} className="space-y-8 pb-12">
+        <div className="upload-grid">
+          {/* Left Column: File Upload */}
+          <div className="space-y-6">
+            <div className="rounded-lg shadow-sm border p-6" style={cardStyle}>
           <label className="block text-sm font-medium mb-3" style={textStyle}>
             Document File <span className="text-red-500">*</span>
           </label>
@@ -169,7 +191,7 @@ export function UploadDocument() {
 
               {/* New Files */}
               {formData.files.map((file, idx) => (
-                <div key={`${file.name}-${idx}`} className="flex items-center gap-3 p-3 rounded-lg border bg-green-500/5 border-green-500/20">
+                <div key={`${file.name}-${idx}`} className="flex items-center gap-3 p-3 mb-1 rounded-lg border bg-green-500/5 border-green-500/20">
                   <FileText className="size-5 text-green-500" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate" style={textStyle}>{file.name}</p>
@@ -194,10 +216,13 @@ export function UploadDocument() {
               </button>
             </div>
           )}
-        </div>
+            </div>
+          </div>
 
-        <div className="rounded-lg shadow-sm border p-6 space-y-4" style={cardStyle}>
-          <h3 className="text-lg font-semibold" style={textStyle}>Document Information</h3>
+          {/* Right Column: Document Information */}
+          <div className="space-y-6">
+            <div className="rounded-lg shadow-sm border p-6 space-y-4" style={cardStyle}>
+              <h3 className="text-lg font-semibold" style={textStyle}>Document Information</h3>
 
           <div>
             <label htmlFor="title" className="block text-sm font-medium mb-2" style={textStyle}>
@@ -259,18 +284,18 @@ export function UploadDocument() {
 
           <div className="space-y-4">
             <label className="block text-sm font-medium" style={textStyle}>
-              Send to (Initial Recipient)
+              Recipient(s)
             </label>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs mb-1.5 opacity-70" style={textStyle}>Filter By Department</label>
+                <label className="block text-xs mb-1.5 opacity-70 mb-2" style={textStyle}>Filter By Department</label>
                 <select
                   value={selectedDeptId}
                   onChange={(e) => {
                     setSelectedDeptId(e.target.value);
                   }}
-                  className="w-full text-sm px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                  className="w-full p-2 text-sm px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                   style={inputStyle}
                 >
                   <option value="">All Departments</option>
@@ -282,7 +307,7 @@ export function UploadDocument() {
                 </select>
               </div>
               <div className="relative">
-                <label className="block text-xs mb-1.5 opacity-70" style={textStyle}>Select Recipient</label>
+                <label className="block text-xs mb-1.5 opacity-70 mb-2" style={textStyle}>Add Recipient</label>
                 <div
                   className="flex items-center px-4 py-2.5 rounded-xl border focus-within:ring-2 focus-within:ring-blue-500 transition-all"
                   style={inputStyle}
@@ -297,7 +322,7 @@ export function UploadDocument() {
                       setShowResults(true);
                     }}
                     onFocus={() => setShowResults(true)}
-                    className="bg-transparent border-none outline-none flex-1 text-sm placeholder:opacity-50"
+                    className="bg-transparent p-2 border-none outline-none flex-1 text-sm placeholder:opacity-50"
                   />
                   {searchTerm ? (
                     <button onClick={() => setSearchTerm('')} type="button" className="opacity-50 hover:opacity-100">
@@ -337,7 +362,7 @@ export function UploadDocument() {
                               {u.display_name?.charAt(0)}
                             </div>
                             <div className="min-w-0">
-                              <p className="text-sm font-semibold truncate" style={textStyle}>{u.display_name}</p>
+                              <p className="text-md font-semibold truncate" style={textStyle}>{u.display_name}</p>
                               <p className="text-[10px] opacity-60 truncate" style={mutedStyle}>{u.email} • {u.department_name}</p>
                             </div>
                           </button>
@@ -350,39 +375,45 @@ export function UploadDocument() {
             </div>
 
             {formData.recipients.length > 0 ? (
-              <div className="mt-4 p-4 rounded-xl border bg-[var(--muted)] transition-all animate-in fade-in slide-in-from-top-2 flex items-center justify-between shadow-sm" style={{ borderColor: 'var(--border)' }}>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-600/10 flex items-center justify-center text-blue-600 shadow-inner">
-                    <Mail className="size-5" />
+              <div className="space-y-2 mt-4">
+                {formData.recipients.map((recipient, idx) => (
+                  <div key={recipient.email} className="p-4 mb-2 rounded-xl border bg-[var(--muted)] transition-all animate-in fade-in slide-in-from-top-2 flex items-center justify-between shadow-sm" style={{ borderColor: 'var(--border)' }}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-blue-600/10 flex items-center justify-center text-blue-600 shadow-inner">
+                        <Mail className="size-5" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider opacity-50 mb-0.5" style={textStyle}>Recipient {idx + 1}</label>
+                        <p className="text-sm font-semibold" style={textStyle}>{recipient.name}</p>
+                        <p className="text-xs opacity-60" style={mutedStyle}>
+                          {recipient.departmentName} • {recipient.email}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeRecipient(idx)}
+                      className="p-2.5 hover:bg-red-500/10 text-red-600 rounded-xl transition-all"
+                      title="Remove Recipient"
+                    >
+                      <X className="size-5" />
+                    </button>
                   </div>
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider opacity-50 mb-0.5" style={textStyle}>Target Handler</label>
-                    <p className="text-sm font-semibold" style={textStyle}>{formData.recipients[0].name}</p>
-                    <p className="text-xs opacity-60" style={mutedStyle}>
-                      {formData.recipients[0].departmentName} • {formData.recipients[0].email}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => removeRecipient()}
-                  className="p-2.5 hover:bg-red-500/10 text-red-600 rounded-xl transition-all"
-                  title="Remove Recipient"
-                >
-                  <Trash2 className="size-5" />
-                </button>
+                ))}
               </div>
             ) : (
-              <div className="py-8 text-center rounded-xl border-2 border-dashed" style={{ borderColor: 'var(--border)' }}>
+              <div className="py-8 text-center rounded-xl border-2 border-dashed mt-4 p-2" style={{ borderColor: 'var(--border)' }}>
                 <Users className="size-8 mx-auto mb-2 opacity-20" style={textStyle} />
-                <p className="text-sm" style={mutedStyle}>No recipient selected. Search above to define the initial route.</p>
+                <p className="text-sm" style={mutedStyle}>No recipient selected. Search above to define the route.</p>
               </div>
             )}
           </div>
 
+            </div>
+          </div>
         </div>
 
-        <div className="flex gap-3 justify-end items-center">
+        <div className="flex gap-3 justify-end items-center pt-2">
           {editId && (
             <button
               type="button"

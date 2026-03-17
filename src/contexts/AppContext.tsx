@@ -101,12 +101,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const upsertProfile = async (u: User) => {
     const name = (u.user_metadata?.full_name as string) || u.email?.split('@')[0] || '';
+    // Only sync essential identity fields from Auth. 
+    // Managed fields like department_id should only be changed via dedicated UI actions.
     await supabase.from('profiles').upsert(
       {
         id: u.id,
         email: u.email ?? null,
-        display_name: name || null,
-        department_id: u.user_metadata?.department_id || null
+        display_name: name || null
       },
       { onConflict: 'id' }
     );
@@ -232,6 +233,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await refreshAvatar();
     };
     run();
+
+    // Set up Real-time subscriptions
+    const documentsChannel = supabase
+      .channel('public:documents-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'documents' }, () => {
+        refreshDocuments();
+      })
+      .subscribe();
+
+    const notificationsChannel = supabase
+      .channel('public:notifications-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => {
+        refreshNotifications();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(documentsChannel);
+      supabase.removeChannel(notificationsChannel);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.email, refreshDocuments, refreshNotifications, refreshAvatar]);
 

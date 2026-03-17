@@ -84,6 +84,8 @@ const elasticKeyframes = `
 }
 `;
 
+import logo from '../assets/doctrack.png';
+
 /**
  * Modern Auth Layout with elastic sliding transition.
  * 
@@ -235,11 +237,8 @@ export function AuthLayout() {
     return (
       <>
         {/* Branding Row */}
-        <div className="flex items-center gap-4 mb-10 animate-in fade-in slide-in-from-top-4 duration-700">
-          <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center shadow-inner">
-            <FileText className="w-6 h-6 text-white" />
-          </div>
-          <h2 className="text-3xl font-extrabold tracking-tight">DocTrack</h2>
+        <div className="flex flex-col items-center mb-10 animate-in fade-in slide-in-from-top-4 duration-700">
+          <img src={logo} alt="DocTrack Logo" className="w-48 h-auto drop-shadow-2xl" />
         </div>
 
         {/* Dynamic Heading Section */}
